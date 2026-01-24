@@ -28,13 +28,17 @@ def is_streamlit_cloud():
     )
 
 IS_CLOUD = is_streamlit_cloud()
-BASE_DIR = Path(tempfile.gettempdir())
-METADATA_DB_FILE = BASE_DIR / "eis_ml_metadata.db"
-UNIVERSE_DB_FILE = BASE_DIR / "eis_ml_universe.db"
-LOG_FILE = BASE_DIR / "eis_ml_query.log"
 
+# Use a guaranteed-writable temporary directory
+BASE_DIR = Path(tempfile.gettempdir())
+METADATA_DB_FILE = BASE_DIR / "eis_ai_metadata.db"
+UNIVERSE_DB_FILE = BASE_DIR / "eis_ai_universe.db"
+LOG_FILE = BASE_DIR / "eis_ai_query.log"
+
+# Ensure the base directory exists
 BASE_DIR.mkdir(exist_ok=True)
 
+# Set up logging
 logging.basicConfig(
     filename=LOG_FILE,
     level=logging.INFO,
@@ -45,27 +49,23 @@ logging.basicConfig(
 # STREAMLIT PAGE CONFIGURATION
 # ==============================
 st.set_page_config(
-    page_title="EIS & ML Knowledge Explorer",
+    page_title="EIS + AI Knowledge Explorer",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-st.title("🔬 EIS & ML Context-Aware Knowledge Explorer")
+st.title("🔋 EIS & AI Research Explorer")
 st.markdown("""
-This advanced tool queries **arXiv** for literature on **Universal Modeling of EIS Data through NLP and ML**, focusing on:
-- **Universal Modeling** (Cross-chemistry and cross-condition generalization)
-- **Context Extraction** (NLP-based extraction of Temp, SoC, and Chemistry metadata)
-- **Equivalent Circuit Models (ECM)** & **Distribution of Relaxation Times (DRT)**
-- **Health Prognostics** (SOH, RUL, and internal resistance prediction)
-- **Advanced ML** (CNNs, Transformers, and Physics-Informed Neural Networks for EIS)
+This tool queries **arXiv** for the intersection of **Electrochemical Impedance Spectroscopy (EIS)** and **Artificial Intelligence**, focusing on:
+- **EIS Analysis**: Nyquist/Bode plots, Equivalent Circuit Modeling (ECM), Distribution of Relaxation Times (DRT).
+- **AI/ML Methods**: Machine Learning, Deep Learning (CNN/RNN/LSTM), Data-driven modeling, and NLP.
+- **Applications**: Battery State of Health (SOH), Fuel Cells, Corrosion, and Biosensors.
 
-It uses **SciBERT with attention-aware relevance scoring** (>30% threshold) and stores:
-- **Metadata** in `eis_ml_metadata.db`
-- **Full extracted text** in `eis_ml_universe.db`
+It uses **SciBERT with attention-aware relevance scoring** and filters for papers where EIS concepts are mandatory.
 """)
 
 if IS_CLOUD:
-    st.info("☁️ **Streamlit Cloud Mode**: All files are stored temporarily in `/tmp`. Use download buttons before your session expires!")
+    st.info("☁️ **Streamlit Cloud Mode**: Files are stored temporarily in `/tmp`. Download your databases before the session ends!")
 
 # ==============================
 # SESSION STATE INITIALIZATION
@@ -93,7 +93,7 @@ def update_log(message):
 # ==============================
 @st.cache_resource
 def load_scibert():
-    update_log("Loading SciBERT model and tokenizer...")
+    update_log("Loading SciBERT model (optimized for scientific text)...")
     try:
         tokenizer = AutoTokenizer.from_pretrained("allenai/scibert_scivocab_uncased")
         model = AutoModel.from_pretrained("allenai/scibert_scivocab_uncased")
@@ -107,31 +107,48 @@ def load_scibert():
 try:
     scibert_tokenizer, scibert_model = load_scibert()
 except Exception as e:
-    st.error(f"❌ Failed to load SciBERT. Install: `pip install transformers torch`")
+    st.error(f"❌ Failed to load SciBERT: {e}.")
     st.stop()
 
 # ==============================
-# EIS & ML PATTERNS
+# TEXT NORMALIZATION AND PATTERN DEFINITIONS
 # ==============================
+@st.cache_data
+def normalize_text(text):
+    text = text.lower()
+    # Handle common EIS subscripts/shorthands
+    shorthands = {'z\'': 'real impedance', 'z\'\'': 'imaginary impedance', 'ω': 'omega'}
+    for key, val in shorthands.items():
+        text = text.replace(key, val)
+    return text
+
+# MANDATORY TERMS (At least one must be present)
+MANDATORY_EIS = ["eis", "impedance spectroscopy", "electrochemical impedance"]
+
+# AI & DOMAIN KEYWORDS
 KEY_TERMS = [
-    "electrochemical impedance spectroscopy", "EIS", "impedance data",
-    "machine learning", "deep learning", "neural networks", "NLP",
-    "natural language processing", "context-aware", "universal modeling",
-    "state of health", "SOH", "remaining useful life", "RUL",
-    "equivalent circuit model", "ECM", "distribution of relaxation times", "DRT",
-    "Nyquist plot", "Bode plot", "lithium-ion battery", "transfer learning",
-    "physics-informed", "transformer model", "gaussian process regression"
+    "machine learning", "deep learning", "artificial intelligence", "neural networks",
+    "data-driven", "natural language processing", "nlp", "large language models",
+    "random forest", "gaussian process", "convolutional neural network", "cnn", "lstm",
+    "equivalent circuit", "distribution of relaxation times", "drt", "nyquist", "bode plot",
+    "state of health", "soh prediction", "battery aging", "transfer learning", 
+    "physics-informed", "bayesian inference", "feature extraction"
 ]
 
+# Optimized regex patterns for EIS + AI matching
 KEY_PATTERNS = [
-    r'\belectrochemical impedance spectroscopy|eis\b',
-    r'\bnyquist|bode\s*plots?\b',
-    r'\bequivalent circuit|ecm|drt|relaxation times\b',
-    r'\bmachine learning|deep learning|neural networks?|cnn|lstm|transformer\b',
-    r'\buniversal modeling|transfer learning|generalizab\b',
-    r'\bcontext-aware|metadata extraction|nlp|natural language\b',
-    r'\bstate of health|soh|rul|remaining useful life\b',
-    r'\bbattery|li-ion|lithium|lfp|nmc|fuel cell\b'
+    r'\be?is\b|electrochemical impedance spectroscopy',
+    r'\bmachine learning|deep learning|artificial intelligence|neural networks?\b',
+    r'\bdata[- ]driven|predictive model(?:ing)?\b',
+    r'\bnlp|natural language processing|transformer models?\b',
+    r'\bcnn|lstm|rnn|gru|autoencoder\b',
+    r'\beq?uivalent circuit (?:model|modeling|fitting)\b',
+    r'\bnyquist|bode\s*plot\b',
+    r'\bdrt|distribution of relaxation times\b',
+    r'\bsoh|state\s*of\s*health|remaining useful life|rul\b',
+    r'\bbattery|fuel cell|electrolyzer|corrosion|biosensor\b',
+    r'\bphysics[- ]informed|pinn\b',
+    r'\brand[o]m forest|xgboost|support vector machine|svm\b'
 ]
 
 @st.cache_data
@@ -141,143 +158,195 @@ def compile_patterns():
 COMPILED_PATTERNS = compile_patterns()
 
 # ==============================
-# NLP CONTEXT EXTRACTION (NEW FEATURE)
-# ==============================
-def extract_context(text):
-    """Specific NLP extraction for EIS Context."""
-    context = {"Chemistry": "Unknown", "Temp": "Ambient", "SoC_SOH": "Not Specified"}
-    
-    # Extract Temperature
-    temp = re.search(r'(-?\d+\s*°C|-?\d+\s*K|room temperature)', text, re.I)
-    if temp: context["Temp"] = temp.group(1)
-    
-    # Extract Chemistry
-    chem = re.search(r'\b(LFP|NMC|LCO|NCA|Li-ion|Sodium|Solid-state)\b', text, re.I)
-    if chem: context["Chemistry"] = chem.group(1).upper()
-    
-    # Extract SOH/SOC context
-    health = re.search(r'\b(SOH|SOC|State of Health|State of Charge)\b', text, re.I)
-    if health: context["SoC_SOH"] = health.group(1)
-    
-    return context
-
-# ==============================
-# SCORING & SEARCH
+# SCIBERT-BASED ABSTRACT SCORING
 # ==============================
 @st.cache_data
 def score_abstract_with_scibert(abstract):
     try:
-        inputs = scibert_tokenizer(abstract, return_tensors="pt", truncation=True, max_length=512, padding=True)
+        abstract_norm = normalize_text(abstract)
+        
+        # STRICT REQUIREMENT: Must mention EIS/Impedance
+        if not any(term in abstract_norm for term in MANDATORY_EIS):
+            return 0.0
+
+        inputs = scibert_tokenizer(
+            abstract, return_tensors="pt", truncation=True, 
+            max_length=512, padding=True, return_attention_mask=True
+        )
         with torch.no_grad():
             outputs = scibert_model(**inputs, output_attentions=True)
         
-        num_matched = sum(1 for pat in COMPILED_PATTERNS if pat.search(abstract))
+        # Regex scoring
+        num_matched = sum(1 for pat in COMPILED_PATTERNS if pat.search(abstract_norm))
         relevance_prob = np.sqrt(num_matched) / np.sqrt(len(KEY_PATTERNS))
         
-        # Attention boost for core EIS/ML terms
+        # Attention boost for AI + EIS specific tokens
         tokens = scibert_tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
-        keyword_indices = [i for i, t in enumerate(tokens) if any(kw in t.lower() for kw in ['eis', 'impedance', 'health', 'learning'])]
+        ai_eis_tokens = ['impedance', 'eis', 'learn', 'network', 'data', 'circuit', 'predict']
+        keyword_indices = [i for i, t in enumerate(tokens) if any(kw in t.lower() for kw in ai_eis_tokens)]
+        
         if keyword_indices:
-            relevance_prob = min(relevance_prob + 0.15, 1.0)
-            
+            attentions = outputs.attentions[-1][0, 0].numpy()
+            attn_score = np.sum(attentions[keyword_indices, :]) / len(keyword_indices)
+            if attn_score > 0.05:
+                boost = 0.25 * (len(keyword_indices) / len(tokens))
+                relevance_prob = min(relevance_prob + boost, 1.0)
+        
         return relevance_prob
-    except:
-        return 0.0
-
-@st.cache_data
-def query_arxiv_api(query, categories, max_results, start_year, end_year):
-    client = arxiv.Client()
-    search = arxiv.Search(query=query, max_results=max_results, sort_by=arxiv.SortCriterion.Relevance)
-    
-    papers = []
-    seen_ids = set()
-    
-    for result in client.results(search):
-        if not (start_year <= result.published.year <= end_year): continue
-        if not any(cat in result.categories for cat in categories): continue
-        
-        paper_id = result.get_short_id()
-        if paper_id in seen_ids: continue
-        seen_ids.add(paper_id)
-        
-        relevance_prob = score_abstract_with_scibert(result.summary)
-        if relevance_prob < 0.3: continue
-        
-        ctx = extract_context(result.summary)
-        
-        papers.append({
-            "id": paper_id,
-            "title": result.title,
-            "authors": ", ".join([a.name for a in result.authors]),
-            "year": result.published.year,
-            "categories": ", ".join(result.categories),
-            "abstract": result.summary,
-            "context": f"Chem: {ctx['Chemistry']} | Temp: {ctx['Temp']} | Focus: {ctx['SoC_SOH']}",
-            "pdf_url": result.pdf_url,
-            "relevance_prob": round(relevance_prob * 100, 2)
-        })
-    return papers
+    except Exception as e:
+        update_log(f"Scoring failed: {e}")
+        return 0.1
 
 # ==============================
-# DATABASE & FILE UTILS (KEEPING STRUCTURE)
+# DATABASE LOGIC
 # ==============================
-def init_metadata_db():
-    conn = sqlite3.connect(METADATA_DB_FILE)
-    conn.execute("CREATE TABLE IF NOT EXISTS papers (id TEXT PRIMARY KEY, title TEXT, authors TEXT, year INTEGER, context TEXT, relevance_prob REAL)")
+def init_db(db_path, is_universe=False):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    if is_universe:
+        cursor.execute("CREATE TABLE IF NOT EXISTS papers (id TEXT PRIMARY KEY, title TEXT, authors TEXT, year INTEGER, content TEXT)")
+    else:
+        cursor.execute("CREATE TABLE IF NOT EXISTS papers (id TEXT PRIMARY KEY, title TEXT, authors TEXT, year INTEGER, categories TEXT, abstract TEXT, pdf_url TEXT, matched_terms TEXT, relevance_prob REAL)")
+    conn.commit()
     conn.close()
 
-# (Include your download_pdf_bytes, handle_pdf_download, inspect_metadata_db functions here - they remain identical to your previous code)
-# ... [Keeping standard DB/PDF functions from your original script] ...
+# ==============================
+# ARXIV QUERYING
+# ==============================
+@st.cache_data
+def query_arxiv_api(query, categories, max_results, start_year, end_year):
+    try:
+        client = arxiv.Client()
+        # We search for EIS broadly, then filter for AI in the scoring
+        search = arxiv.Search(
+            query=query,
+            max_results=max_results * 3,
+            sort_by=arxiv.SortCriterion.Relevance
+        )
+        papers = []
+        seen_ids = set()
+        
+        for result in client.results(search):
+            paper_id = result.get_short_id()
+            if paper_id in seen_ids or not (start_year <= result.published.year <= end_year):
+                continue
+            if not any(cat in result.categories for cat in categories):
+                continue
+            
+            relevance_prob = score_abstract_with_scibert(result.summary)
+            if relevance_prob < 0.3: # User requested 30% threshold
+                continue
+                
+            seen_ids.add(paper_id)
+            
+            # Highlight AI and EIS terms
+            abstract_highlighted = result.summary
+            for term in (MANDATORY_EIS + KEY_TERMS[:10]):
+                abstract_highlighted = re.sub(
+                    r'\b' + re.escape(term) + r'\b',
+                    f'<span style="background-color: #D1ECF1; color: #0C5460; font-weight: bold;">{term}</span>',
+                    abstract_highlighted, flags=re.IGNORECASE
+                )
+
+            papers.append({
+                "id": paper_id,
+                "title": result.title,
+                "authors": ", ".join([a.name for a in result.authors]),
+                "year": result.published.year,
+                "categories": ", ".join(result.categories),
+                "abstract": result.summary,
+                "abstract_highlighted": abstract_highlighted,
+                "pdf_url": result.pdf_url,
+                "matched_terms": ", ".join([t for t in (MANDATORY_EIS + KEY_TERMS) if t.lower() in result.summary.lower()]),
+                "relevance_prob": round(relevance_prob * 100, 2)
+            })
+            if len(papers) >= max_results: break
+            
+        return sorted(papers, key=lambda x: x["relevance_prob"], reverse=True)
+    except Exception as e:
+        st.error(f"Search error: {e}")
+        return []
 
 # ==============================
-# MAIN APPLICATION LAYOUT (MATCHES YOUR IMAGE)
+# PDF & FILE HANDLERS
 # ==============================
-st.header("🔍 arXiv Query for EIS & ML Context-Awareness")
-st.markdown("Use the sidebar to configure your search. Results are scored by **SciBERT + regex relevance**.")
+def handle_pdf_download(paper_id, pdf_url, paper_metadata):
+    try:
+        response = requests.get(pdf_url, timeout=30)
+        pdf_bytes = response.content
+        st.session_state.downloaded_pdfs[paper_id] = pdf_bytes
+        
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        full_text = "".join([page.get_text() for page in doc])
+        doc.close()
+        
+        init_db(UNIVERSE_DB_FILE, is_universe=True)
+        conn = sqlite3.connect(UNIVERSE_DB_FILE)
+        conn.execute("INSERT OR REPLACE INTO papers VALUES (?, ?, ?, ?, ?)", 
+                     (paper_id, paper_metadata['title'], paper_metadata['authors'], paper_metadata['year'], full_text))
+        conn.commit()
+        conn.close()
+        st.session_state.universe_db_updated = True
+        return True
+    except Exception as e:
+        update_log(f"PDF Error: {e}")
+        return False
 
-log_container = st.empty()
-log_container.text_area("📝 Processing Logs", "\n".join(st.session_state.log_buffer), height=150)
-
+# ==============================
+# MAIN UI
+# ==============================
 with st.sidebar:
-    st.image("https://arxiv.org/favicon.ico", width=32)
-    st.subheader("⚙️ Search Configuration")
+    st.header("⚙️ EIS + AI Config")
+    # Enforce EIS in the query
+    base_query = '( "Electrochemical Impedance Spectroscopy" OR "EIS" )'
+    ai_topic = st.selectbox("Focus AI Area", ["Machine Learning", "Deep Learning", "NLP", "Data-driven"])
     
-    query_mode = st.radio("Query Mode", ["Auto (Recommended)", "Custom"], horizontal=True)
-    if query_mode == "Auto":
-        query = '("EIS" OR "Impedance Spectroscopy") AND ("Machine Learning" OR "Neural Network" OR "NLP")'
-        st.text_area("Auto-generated Query", value=query, height=100, disabled=True)
-    else:
-        query = st.text_area("Custom Query", value="EIS AND 'Transfer Learning'", height=100)
+    full_query = f'{base_query} AND ("{ai_topic}" OR "Neural Network")'
     
-    # Machine Learning and Physics Categories
-    default_categories = ["stat.ML", "cs.LG", "physics.chem-ph", "eess.SP"]
-    categories = st.multiselect("arXiv Categories", options=default_categories + ["physics.app-ph", "cs.AI"], default=default_categories)
+    st.caption("Constructed API Query:")
+    st.code(full_query)
+
+    categories = st.multiselect("Categories", ["stat.ML", "cs.LG", "physics.chem-ph", "physics.app-ph", "math.ST"], default=["stat.ML", "physics.chem-ph"])
+    max_results = st.slider("Max Results", 10, 100, 30)
+    start_year = st.number_input("Start", 2015, 2026, 2018)
     
-    max_results = st.slider("Max Results", 1, 200, 30)
-    start_year = st.number_input("Start Year", 2010, 2026, 2018)
-    end_year = st.number_input("End Year", 2010, 2026, 2026)
-    
-    search_button = st.button("🚀 Execute Search", type="primary")
+    search_button = st.button("🔎 Search Papers", type="primary")
 
 if search_button:
     st.session_state.search_performed = True
-    with st.spinner("📡 Analyzing EIS/ML Literature..."):
-        papers = query_arxiv_api(query, categories, max_results, start_year, end_year)
-        
-        if not papers:
-            st.warning("No papers met the criteria.")
+    with st.spinner("Analyzing arXiv literature..."):
+        results = query_arxiv_api(full_query, categories, max_results, start_year, 2026)
+        if results:
+            st.session_state.papers_df = pd.DataFrame(results)
+            init_db(METADATA_DB_FILE)
+            conn = sqlite3.connect(METADATA_DB_FILE)
+            st.session_state.papers_df.drop(columns=["abstract_highlighted"]).to_sql("papers", conn, if_exists="replace", index=False)
+            conn.close()
         else:
-            df = pd.DataFrame(papers)
-            st.session_state.papers_df = df
-            st.success(f"✅ Found {len(df)} relevant papers.")
-            
-            for idx, paper in df.iterrows():
-                with st.expander(f"📄 {paper['title']} ({paper['year']}) — {paper['relevance_prob']}%"):
-                    st.info(f"🧬 **Extracted NLP Context**: {paper['context']}")
-                    st.write(paper['abstract'])
-                    st.markdown(f"[🌐 View on arXiv]({paper['pdf_url'].replace('/pdf/', '/abs/')})")
-                    # Unique key fix as requested
-                    if st.button("📥 Index Full Text", key=f"idx_{paper['id']}"):
-                        update_log(f"Indexing full text for {paper['id']}...")
+            st.warning("No papers found matching the 30% relevance criteria for EIS + AI.")
 
-# (Footer download buttons same as your previous code)
+# DISPLAY RESULTS
+if st.session_state.search_performed and st.session_state.papers_df is not None:
+    st.subheader(f"📑 Top Research Papers (Relevance > 30%)")
+    for _, paper in st.session_state.papers_df.iterrows():
+        with st.expander(f"[{paper['relevance_prob']}%] {paper['title']}"):
+            st.write(f"**Authors:** {paper['authors']} | **Year:** {paper['year']}")
+            st.markdown(paper['abstract_highlighted'], unsafe_allow_html=True)
+            if st.button("📥 Index Full Text", key=f"dl_{paper['id']}"):
+                if handle_pdf_download(paper['id'], paper['pdf_url'], paper.to_dict()):
+                    st.success("Paper added to Universe DB!")
+
+    # EXPORTS
+    st.divider()
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.download_button("💾 Download Metadata DB", open(METADATA_DB_FILE, "rb") if METADATA_DB_FILE.exists() else b"", "eis_metadata.db")
+    with c2:
+        if st.session_state.universe_db_updated:
+            st.download_button("🧠 Download Universe DB", open(UNIVERSE_DB_FILE, "rb"), "eis_universe.db")
+    with c3:
+        csv = st.session_state.papers_df.to_csv(index=False).encode('utf-8')
+        st.download_button("📊 Export CSV", csv, "eis_ai_results.csv", "text/csv")
+
+st.divider()
+st.text_area("📝 Logs", "\n".join(st.session_state.log_buffer), height=150)
