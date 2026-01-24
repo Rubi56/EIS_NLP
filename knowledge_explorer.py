@@ -66,7 +66,7 @@ This advanced tool queries **arXiv** for scientific literature on **Electrochemi
 - **EIS data augmentation** and **synthetic data generation**
 - **Transfer learning** for EIS analysis
 
-It uses **SciBERT with attention-aware relevance scoring** (>30% threshold) and stores:
+It uses **SciBERT with attention-aware relevance scoring** and stores:
 - **Metadata** in `eis_ai_metadata.db`
 - **Full extracted text** in `eis_ai_universe.db`
 
@@ -162,130 +162,74 @@ def normalize_text(text):
 
 # Comprehensive list of key terms for EIS and AI
 KEY_TERMS = [
-    # Mandatory EIS terms
+    # EIS terms (broad)
     "electrochemical impedance spectroscopy", "EIS", "impedance spectroscopy",
-    "Nyquist plot", "Bode plot", "complex impedance", "Z''", "Z'",
-    "equivalent circuit", "Randles circuit", "Warburg impedance",
-    "charge transfer resistance", "double layer capacitance", "solution resistance",
-    "constant phase element", "CPE", "Faradaic impedance", "non-Faradaic impedance",
+    "impedance", "Nyquist", "Bode", "complex impedance", "Z''", "Z'",
+    "equivalent circuit", "Randles", "Warburg", "charge transfer",
+    "double layer", "constant phase element", "CPE", "electrochemical",
+    "electrochemistry", "electrode", "electrolyte", "faradaic",
+    "non-faradaic", "electrochemical cell", "AC impedance",
     
     # AI/ML terms (comprehensive)
     "artificial intelligence", "AI", "machine learning", "ML", "deep learning",
-    "neural network", "convolutional neural network", "CNN", "recurrent neural network", "RNN",
-    "LSTM", "GRU", "transformer", "attention mechanism", "self-attention",
-    "natural language processing", "NLP", "large language model", "LLM",
+    "neural network", "neural", "convolutional", "CNN", "recurrent", "RNN",
+    "LSTM", "GRU", "transformer", "attention", "self-attention",
+    "natural language processing", "NLP", "language model", "LLM",
     "GPT", "BERT", "transformer model", "language model",
-    "data-driven", "data-driven model", "data-driven approach",
-    "supervised learning", "unsupervised learning", "semi-supervised learning",
-    "reinforcement learning", "transfer learning", "few-shot learning",
-    "regression", "classification", "clustering", "dimensionality reduction",
-    "PCA", "t-SNE", "autoencoder", "variational autoencoder", "VAE",
-    "generative adversarial network", "GAN", "diffusion model",
-    "random forest", "support vector machine", "SVM", "gradient boosting",
-    "XGBoost", "LightGBM", "CatBoost", "ensemble learning",
+    "data-driven", "data driven", "data mining", "pattern recognition",
+    "supervised", "unsupervised", "semi-supervised", "reinforcement",
+    "transfer learning", "few-shot", "regression", "classification",
+    "clustering", "dimensionality reduction", "PCA", "t-SNE", "autoencoder",
+    "variational autoencoder", "VAE", "generative adversarial", "GAN",
+    "diffusion", "random forest", "support vector machine", "SVM",
+    "gradient boosting", "XGBoost", "LightGBM", "CatBoost", "ensemble",
     
-    # AI applications in EIS
-    "automated equivalent circuit fitting", "EIS data analysis",
-    "EIS prediction", "EIS classification", "EIS regression",
-    "impedance data augmentation", "synthetic EIS data",
-    "EIS feature extraction", "impedance feature engineering",
-    "EIS anomaly detection", "impedance fault diagnosis",
-    "real-time EIS monitoring", "online EIS analysis",
+    # Applications
+    "battery", "lithium", "LIB", "supercapacitor", "fuel cell",
+    "PEMFC", "SOFC", "corrosion", "biomedical", "biosensor",
+    "sensor", "electrocatalyst", "photoelectrochemical", "solar cell",
+    "energy storage", "energy conversion", "electrochemical sensor",
     
-    # Materials and applications
-    "battery", "lithium-ion battery", "LIB", "solid-state battery",
-    "supercapacitor", "fuel cell", "PEMFC", "SOFC",
-    "corrosion", "corrosion monitoring", "corrosion detection",
-    "biomedical", "biosensor", "impedance biosensor",
-    "electrocatalyst", "electrode", "electrolyte",
-    "sensor", "impedance sensor", "electrochemical sensor",
-    
-    # EIS parameters and analysis
-    "impedance modulus", "phase angle", "frequency response",
-    "Kramers-Kronig relations", "distribution of relaxation times", "DRT",
-    "electrochemical kinetics", "charge transfer kinetics",
-    "mass transport", "diffusion coefficient",
-    "electrode-electrolyte interface", "solid electrolyte interface", "SEI",
-    
-    # Advanced AI/ML techniques
-    "bayesian optimization", "gaussian process", "kernel method",
-    "feature selection", "hyperparameter tuning", "model optimization",
-    "explainable AI", "XAI", "model interpretation", "SHAP", "LIME",
-    "time series analysis", "spectral analysis", "frequency domain analysis",
-    "signal processing", "digital signal processing", "DSP",
-    
-    # Data science and processing
-    "big data", "data mining", "pattern recognition",
-    "computer vision", "image processing", "spectrum processing",
-    "data fusion", "multimodal data", "multi-source data",
-    "cloud computing", "edge computing", "IoT", "internet of things",
+    # Analysis techniques
+    "equivalent circuit modeling", "ECM", "distribution of relaxation times",
+    "DRT", "Kramers-Kronig", "electrochemical kinetics", "charge transfer",
+    "mass transport", "diffusion", "electrode-electrolyte", "SEI",
     
     # Software and tools
     "Python", "TensorFlow", "PyTorch", "Keras", "scikit-learn",
-    "ZView", "ZPlot", "EC-Lab", "Gamry", "BioLogic",
-    "MATLAB", "Simulink", "LabVIEW",
+    "MATLAB", "Simulink", "LabVIEW", "ZView", "Gamry", "EC-Lab",
     
     # Related techniques
-    "cyclic voltammetry", "CV", "chronoamperometry", "chronopotentiometry",
-    "electrochemical noise", "potentiostatic", "galvanostatic"
+    "cyclic voltammetry", "CV", "chronoamperometry", "potentiostatic",
+    "galvanostatic", "electrochemical noise", "Tafel", "polarization"
 ]
 
 # Optimized regex patterns for fast matching
 KEY_PATTERNS = [
-    # Mandatory EIS patterns
+    # EIS patterns
     r'\belectrochemical impedance spectroscopy|EIS|impedance spectroscopy\b',
-    r'\bnyquist plot|bode plot|complex impedance\b',
-    r'\bequivalent circuit|randles circuit|warburg impedance\b',
-    r'\bcharge transfer resistance|double layer capacitance|solution resistance\b',
-    r'\bconstant phase element|CPE|faradaic impedance\b',
+    r'\bimpedance\b',
+    r'\bnyquist|bode\b',
+    r'\bequivalent circuit|randles|warburg\b',
+    r'\bcharge transfer|double layer|constant phase element|CPE\b',
     
-    # AI/ML mandatory patterns
+    # AI/ML patterns
     r'\bartificial intelligence|AI\b',
     r'\bmachine learning|ML\b',
     r'\bdeep learning|neural network\b',
     r'\bnatural language processing|NLP\b',
-    r'\blarge language model|LLM\b',
     r'\bdata-driven|data driven\b',
+    r'\bneural\b',
     
-    # AI techniques
-    r'\bconvolutional neural network|CNN\b',
-    r'\brecurrent neural network|RNN|LSTM|GRU\b',
-    r'\btransformer|attention mechanism|self-attention\b',
-    r'\bGPT|BERT|transformer model|language model\b',
-    r'\bsupervised learning|unsupervised learning|semi-supervised learning\b',
-    r'\breinforcement learning|transfer learning|few-shot learning\b',
+    # Battery/Energy
+    r'\bbattery|lithium|supercapacitor|fuel cell\b',
     
-    # Applications in EIS
-    r'\bautomated equivalent circuit fitting\b',
-    r'\bEIS data analysis|impedance data analysis\b',
-    r'\bEIS prediction|impedance prediction\b',
-    r'\bEIS classification|impedance classification\b',
-    r'\bEIS regression|impedance regression\b',
-    r'\bEIS data augmentation|synthetic EIS data\b',
-    r'\bEIS feature extraction|impedance feature extraction\b',
+    # Analysis
+    r'\bequivalent circuit modeling|ECM\b',
+    r'\bdistribution of relaxation times|DRT\b',
     
-    # Materials and systems
-    r'\bbattery|lithium-ion battery|LIB\b',
-    r'\bsupercapacitor|fuel cell\b',
-    r'\bcorrosion monitoring|corrosion detection\b',
-    r'\bbiomedical|biosensor|impedance biosensor\b',
-    
-    # EIS analysis techniques
-    r'\bKramers-Kronig relations|distribution of relaxation times|DRT\b',
-    r'\belectrochemical kinetics|charge transfer kinetics\b',
-    r'\bmass transport|diffusion coefficient\b',
-    r'\belectrode-electrolyte interface|solid electrolyte interface|SEI\b',
-    
-    # Advanced AI techniques
-    r'\bbayesian optimization|gaussian process|kernel method\b',
-    r'\bfeature selection|hyperparameter tuning\b',
-    r'\bexplainable AI|XAI|model interpretation|SHAP|LIME\b',
-    r'\btime series analysis|spectral analysis\b',
-    
-    # Software and implementation
-    r'\bPython|TensorFlow|PyTorch|Keras|scikit-learn\b',
-    r'\bZView|ZPlot|EC-Lab|Gamry|BioLogic\b',
-    r'\bMATLAB|Simulink|LabVIEW\b'
+    # Software
+    r'\bPython|TensorFlow|PyTorch|MATLAB\b'
 ]
 
 @st.cache_data
@@ -314,51 +258,54 @@ def score_abstract_with_scibert(abstract):
         with torch.no_grad():
             outputs = scibert_model(**inputs, output_attentions=True)
         
-        # Regex-based relevance (lenient with sqrt)
+        # Regex-based relevance
         abstract_normalized = normalize_text(abstract)
         
-        # Check for mandatory terms: EIS and at least one AI term
-        has_eis = any(pat.search(abstract_normalized) for pat in COMPILED_PATTERNS[:5])
-        has_ai = any(pat.search(abstract_normalized) for pat in COMPILED_PATTERNS[5:11])
+        # Count matches for EIS terms
+        eis_patterns = COMPILED_PATTERNS[:5]
+        eis_matches = sum(1 for pat in eis_patterns if pat.search(abstract_normalized))
         
-        if not (has_eis and has_ai):
-            # Paper doesn't contain both EIS and AI terms
-            update_log(f"Paper missing mandatory terms (EIS: {has_eis}, AI: {has_ai})")
-            return 0.0
+        # Count matches for AI terms
+        ai_patterns = COMPILED_PATTERNS[5:11]
+        ai_matches = sum(1 for pat in ai_patterns if pat.search(abstract_normalized))
         
-        num_matched = sum(1 for pat in COMPILED_PATTERNS if pat.search(abstract_normalized))
-        relevance_prob = np.sqrt(num_matched) / np.sqrt(len(KEY_PATTERNS))
+        # Calculate base relevance
+        total_matches = sum(1 for pat in COMPILED_PATTERNS if pat.search(abstract_normalized))
+        base_relevance = np.sqrt(total_matches) / np.sqrt(len(KEY_PATTERNS))
+        
+        # Boost if both EIS and AI terms are present
+        if eis_matches > 0 and ai_matches > 0:
+            boost = 0.4  # Strong boost for having both
+            relevance_prob = min(base_relevance + boost, 1.0)
+        elif eis_matches > 0 or ai_matches > 0:
+            relevance_prob = base_relevance
+        else:
+            relevance_prob = base_relevance * 0.5
         
         # Attention-based boost for key terms
         tokens = scibert_tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
         keyword_indices = [
             i for i, token in enumerate(tokens)
-            if any(kw in token.lower() for kw in ['eis', 'impedance', 'machine', 'learning', 'neural', 'network', 'ai', 'data', 'model'])
+            if any(kw in token.lower() for kw in ['impedance', 'electrochemical', 'neural', 'learning', 'network', 'data', 'model'])
         ]
         if keyword_indices:
             # Use last layer, first attention head
             attentions = outputs.attentions[-1][0, 0].numpy()
             attn_score = np.sum(attentions[keyword_indices, :]) / len(keyword_indices)
             if attn_score > 0.1:
-                boost = 0.3 * (len(keyword_indices) / len(tokens))
+                boost = 0.2 * (len(keyword_indices) / len(tokens))
                 relevance_prob = min(relevance_prob + boost, 1.0)
         
-        update_log(f"SciBERT (attention-boosted) scored abstract: {relevance_prob:.3f} (patterns matched: {num_matched})")
+        update_log(f"SciBERT scored abstract: {relevance_prob:.3f} (EIS: {eis_matches}, AI: {ai_matches})")
         return relevance_prob
     except Exception as e:
         update_log(f"SciBERT scoring failed: {str(e)}")
         # Fallback to regex-only scoring
         abstract_normalized = normalize_text(abstract)
         
-        # Check for mandatory terms
-        has_eis = any(pat.search(abstract_normalized) for pat in COMPILED_PATTERNS[:5])
-        has_ai = any(pat.search(abstract_normalized) for pat in COMPILED_PATTERNS[5:11])
-        
-        if not (has_eis and has_ai):
-            return 0.0
-            
-        num_matched = sum(1 for pat in COMPILED_PATTERNS if pat.search(abstract_normalized))
-        relevance_prob = np.sqrt(num_matched) / np.sqrt(len(KEY_PATTERNS))
+        # Count matches
+        total_matches = sum(1 for pat in COMPILED_PATTERNS if pat.search(abstract_normalized))
+        relevance_prob = np.sqrt(total_matches) / np.sqrt(len(KEY_PATTERNS))
         update_log(f"Fallback scoring: {relevance_prob:.3f}")
         return relevance_prob
 
@@ -381,8 +328,8 @@ def init_metadata_db():
                 pdf_url TEXT,
                 matched_terms TEXT,
                 relevance_prob REAL,
-                has_eis BOOLEAN,
-                has_ai BOOLEAN
+                eis_score INTEGER,
+                ai_score INTEGER
             )
         """)
         conn.commit()
@@ -416,29 +363,37 @@ def init_universe_db():
         st.error(f"Database error: {e}")
 
 # ==============================
-# ARXIV QUERY FUNCTION WITH DUPLICATE PREVENTION
+# ARXIV QUERY FUNCTION - BROADER SEARCH
 # ==============================
 @st.cache_data
 def query_arxiv_api(query, categories, max_results, start_year, end_year):
-    """Query arXiv and return relevant papers with uniqueness guarantee."""
+    """Query arXiv and return relevant papers."""
     try:
         client = arxiv.Client()
         search = arxiv.Search(
             query=query,
-            max_results=max_results * 3,  # Fetch extra to account for filtering
+            max_results=max_results * 4,  # Fetch more to account for filtering
             sort_by=arxiv.SortCriterion.Relevance,
             sort_order=arxiv.SortOrder.Descending
         )
         papers = []
-        query_terms = [t.strip() for t in query.split(' OR ')]
-        query_words = {t.strip('"').lower() for t in query_terms}
         seen_ids = set()  # Prevent duplicate paper IDs
         
+        # Define term groups for scoring
+        eis_terms = [
+            'electrochemical impedance spectroscopy', 'EIS', 'impedance spectroscopy',
+            'impedance', 'nyquist', 'bode', 'equivalent circuit'
+        ]
+        
+        ai_terms = [
+            'artificial intelligence', 'machine learning', 'deep learning',
+            'neural network', 'data-driven', 'natural language processing',
+            'AI', 'ML', 'neural'
+        ]
+        
         for result in client.results(search):
-            # Year filtering (start from 2010 as requested)
+            # Year filtering
             if not (start_year <= result.published.year <= end_year):
-                continue
-            if not any(cat in result.categories for cat in categories):
                 continue
             
             # Ensure uniqueness
@@ -447,38 +402,32 @@ def query_arxiv_api(query, categories, max_results, start_year, end_year):
                 continue
             seen_ids.add(paper_id)
             
-            # Check for mandatory terms: EIS and AI
             abstract_lower = result.summary.lower()
             title_lower = result.title.lower()
+            text_to_check = abstract_lower + " " + title_lower
             
-            # Check for EIS terms
-            eis_terms = ['electrochemical impedance spectroscopy', 'eis', 'impedance spectroscopy']
-            has_eis = any(term in abstract_lower or term in title_lower for term in eis_terms)
+            # Calculate EIS score
+            eis_score = sum(1 for term in eis_terms if term in text_to_check)
             
-            # Check for AI/ML terms
-            ai_terms = ['artificial intelligence', 'machine learning', 'deep learning', 'neural network', 
-                       'natural language processing', 'data-driven', 'ai', 'ml']
-            has_ai = any(term in abstract_lower or term in title_lower for term in ai_terms)
+            # Calculate AI score
+            ai_score = sum(1 for term in ai_terms if term in text_to_check)
             
-            # Only include papers that have BOTH EIS and AI terms
-            if not (has_eis and has_ai):
-                continue
-            
-            # Match other terms in title or abstract
-            matched_terms = [term for term in query_words if term in abstract_lower or term in title_lower]
-            if not matched_terms:
+            # Only include papers with at least one EIS OR AI term
+            if eis_score == 0 and ai_score == 0:
                 continue
             
             # Score relevance
             relevance_prob = score_abstract_with_scibert(result.summary)
             
-            # Skip papers below threshold
-            if relevance_prob < 0.3:  # 30% threshold
-                continue
+            # Find matched terms
+            matched_terms = []
+            for term in KEY_TERMS:
+                if term in text_to_check:
+                    matched_terms.append(term)
             
             # Highlight matched terms in abstract
             abstract_highlighted = result.summary
-            for term in matched_terms:
+            for term in matched_terms[:10]:  # Limit to first 10 terms for performance
                 abstract_highlighted = re.sub(
                     r'\b' + re.escape(term) + r'\b',
                     f'<span style="background-color: #FFF3CD; color: #856404; font-weight: bold;">{term}</span>',
@@ -495,22 +444,22 @@ def query_arxiv_api(query, categories, max_results, start_year, end_year):
                 "abstract": result.summary,
                 "abstract_highlighted": abstract_highlighted,
                 "pdf_url": result.pdf_url,
-                "matched_terms": ", ".join(matched_terms) if matched_terms else "None",
+                "matched_terms": ", ".join(matched_terms[:15]) if matched_terms else "None",
                 "relevance_prob": round(relevance_prob * 100, 2),
-                "has_eis": has_eis,
-                "has_ai": has_ai
+                "eis_score": eis_score,
+                "ai_score": ai_score
             })
             
             if len(papers) >= max_results:
                 break
         
-        # Sort by relevance
-        papers = sorted(papers, key=lambda x: x["relevance_prob"], reverse=True)
-        update_log(f"Query returned {len(papers)} unique papers with EIS+AI")
+        # Sort by combined score (EIS + AI)
+        papers = sorted(papers, key=lambda x: (x["eis_score"] + x["ai_score"]), reverse=True)
+        update_log(f"Query returned {len(papers)} unique papers")
         return papers
     except Exception as e:
         update_log(f"arXiv query failed: {str(e)}")
-        st.error(f"Error querying arXiv: {str(e)}. Try simplifying the query.")
+        st.error(f"Error querying arXiv: {str(e)}")
         return []
 
 # ==============================
@@ -536,29 +485,30 @@ def extract_sections_from_text(full_text):
     text_lower = full_text.lower()
     
     # Find EIS-related sections
-    eis_keywords = ['eis', 'electrochemical impedance', 'impedance spectroscopy', 
-                   'nyquist', 'bode', 'equivalent circuit']
+    eis_keywords = ['impedance', 'nyquist', 'bode', 'equivalent circuit', 'charge transfer']
     for keyword in eis_keywords:
         if keyword in text_lower:
-            # Find context around keyword
-            idx = text_lower.find(keyword)
-            start = max(0, idx - 200)
-            end = min(len(text_lower), idx + 200)
-            sections["eis_sections"].append(f"...{full_text[start:end]}...")
+            # Find all occurrences
+            indices = [m.start() for m in re.finditer(re.escape(keyword), text_lower)]
+            for idx in indices[:2]:  # Get first 2 occurrences
+                start = max(0, idx - 200)
+                end = min(len(text_lower), idx + 200)
+                sections["eis_sections"].append(f"...{full_text[start:end]}...")
     
     # Find AI-related sections
     ai_keywords = ['machine learning', 'deep learning', 'neural network', 'artificial intelligence',
-                  'data-driven', 'nlp', 'natural language processing', 'ai', 'ml']
+                  'data-driven', 'nlp', 'natural language processing']
     for keyword in ai_keywords:
         if keyword in text_lower:
-            idx = text_lower.find(keyword)
-            start = max(0, idx - 200)
-            end = min(len(text_lower), idx + 200)
-            sections["ai_sections"].append(f"...{full_text[start:end]}...")
+            indices = [m.start() for m in re.finditer(re.escape(keyword), text_lower)]
+            for idx in indices[:2]:
+                start = max(0, idx - 200)
+                end = min(len(text_lower), idx + 200)
+                sections["ai_sections"].append(f"...{full_text[start:end]}...")
     
     # Limit to top 3 sections each
-    sections["eis_sections"] = sections["eis_sections"][:3]
-    sections["ai_sections"] = sections["ai_sections"][:3]
+    sections["eis_sections"] = list(set(sections["eis_sections"]))[:3]
+    sections["ai_sections"] = list(set(sections["ai_sections"]))[:3]
     
     return sections
 
@@ -643,19 +593,38 @@ def inspect_metadata_db():
     conn.close()
     
     st.subheader("🗃️ Metadata Database Inspection")
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    
+    # Add filters
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        min_eis = st.slider("Min EIS Score", 0, 10, 0)
+    with col2:
+        min_ai = st.slider("Min AI Score", 0, 10, 0)
+    with col3:
+        min_rel = st.slider("Min Relevance %", 0, 100, 0)
+    
+    # Filter dataframe
+    filtered_df = df[
+        (df['eis_score'] >= min_eis) & 
+        (df['ai_score'] >= min_ai) & 
+        (df['relevance_prob'] >= min_rel)
+    ]
+    
+    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
     
     # Summary statistics
     st.markdown("### 📊 Summary Statistics")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total Papers", len(df))
+        st.metric("Total Papers", len(filtered_df))
     with col2:
-        st.metric("Avg Relevance", f"{df['relevance_prob'].mean():.1f}%")
+        avg_eis = filtered_df['eis_score'].mean()
+        st.metric("Avg EIS Score", f"{avg_eis:.1f}")
     with col3:
-        st.metric("Year Range", f"{df['year'].min()}-{df['year'].max()}")
+        avg_ai = filtered_df['ai_score'].mean()
+        st.metric("Avg AI Score", f"{avg_ai:.1f}")
     with col4:
-        st.metric("Top Category", df['categories'].str.split(',').explode().mode().iloc[0] if not df.empty else "N/A")
+        st.metric("Year Range", f"{filtered_df['year'].min()}-{filtered_df['year'].max()}")
     
     # Allow download
     metadata_bytes = get_db_as_bytes(METADATA_DB_FILE)
@@ -703,7 +672,7 @@ def inspect_universe_db():
             st.info("No matches found.")
     
     # Show paper list with EIS/AI sections
-    st.markdown("### All Indexed Papers with EIS/AI Sections")
+    st.markdown("### All Indexed Papers")
     
     for idx, row in df.iterrows():
         with st.expander(f"📊 {row['title']} ({row['year']})"):
@@ -738,8 +707,7 @@ def inspect_universe_db():
 # ==============================
 st.header("🔍 arXiv Query for EIS with AI/ML Applications")
 st.markdown("""
-Use the sidebar to configure your search. Results are filtered to include **only papers containing BOTH EIS and AI/ML terms**.
-Papers are scored by **SciBERT + regex relevance** (>30% threshold).
+Use the sidebar to configure your search. Results are scored based on **EIS and AI term frequency**.
 """)
 
 # Log display
@@ -753,42 +721,54 @@ with st.sidebar:
     st.subheader("⚙️ Search Configuration")
     
     # Query construction
-    query_mode = st.radio("Query Mode", ["Auto (Recommended)", "Custom"], horizontal=True)
-    if query_mode == "Auto":
-        # Build query that ensures both EIS and AI terms
-        eis_terms = ['"electrochemical impedance spectroscopy"', '"EIS"', '"impedance spectroscopy"']
-        ai_terms = ['"artificial intelligence"', '"machine learning"', '"deep learning"', 
-                   '"neural network"', '"natural language processing"', '"data-driven"']
+    query_mode = st.radio("Query Mode", ["Auto (Broad)", "Auto (Focused)", "Custom"], horizontal=True)
+    
+    if query_mode == "Auto (Broad)":
+        # Broad search - OR of all terms
+        query = ' OR '.join([f'"{term}"' for term in KEY_TERMS[:50]])  # Limit to 50 terms
+        st.text_area("Auto-generated Query", value=query[:500] + "..." if len(query) > 500 else query, 
+                    height=100, disabled=True)
         
-        # Create query that requires both EIS AND AI
-        query = f'({" OR ".join(eis_terms)}) AND ({" OR ".join(ai_terms)})'
+    elif query_mode == "Auto (Focused)":
+        # Focused search for EIS + AI
+        eis_core = ['"electrochemical impedance"', '"impedance spectroscopy"', '"EIS"']
+        ai_core = ['"machine learning"', '"artificial intelligence"', '"deep learning"', '"neural network"']
+        query = ' OR '.join(eis_core + ai_core)
         st.text_area("Auto-generated Query", value=query, height=100, disabled=True)
-    else:
+        
+    else:  # Custom
         query = st.text_area("Custom Query", 
-                           value='("electrochemical impedance spectroscopy" OR "EIS") AND ("machine learning" OR "artificial intelligence")',
+                           value='("electrochemical impedance" OR "EIS") AND ("machine learning" OR "artificial intelligence")',
                            height=100)
     
     # Categories
     default_categories = ["physics.chem-ph", "cond-mat.mtrl-sci", "cs.LG", "cs.AI", "physics.app-ph"]
     categories = st.multiselect(
         "arXiv Categories",
-        options=default_categories + ["cs.CL", "cs.CV", "stat.ML", "physics.ins-det", "physics.comp-ph"],
-        default=default_categories
+        options=default_categories + ["cs.CL", "cs.CV", "stat.ML", "physics.ins-det", "physics.comp-ph", "q-bio.BM"],
+        default=default_categories,
+        help="Select categories to search in"
     )
     
     # Limits
-    max_results = st.slider("Max Results", min_value=1, max_value=200, value=50)
+    max_results = st.slider("Max Results", min_value=10, max_value=500, value=100)
     current_year = datetime.now().year
     col1, col2 = st.columns(2)
     with col1:
-        start_year = st.number_input("Start Year", min_value=2010, max_value=current_year, value=2010)
+        start_year = st.number_input("Start Year", min_value=2000, max_value=current_year, value=2010)
     with col2:
         end_year = st.number_input("End Year", min_value=start_year, max_value=current_year, value=current_year)
     
     # Filter options
     st.markdown("---")
-    st.subheader("🔍 Advanced Filters")
-    min_relevance = st.slider("Minimum Relevance (%)", min_value=30, max_value=100, value=30)
+    st.subheader("🔍 Result Filters")
+    min_relevance = st.slider("Minimum Relevance (%)", min_value=0, max_value=100, value=20)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        require_eis = st.checkbox("Require EIS terms", value=True)
+    with col2:
+        require_ai = st.checkbox("Require AI terms", value=True)
     
     # Action button
     st.markdown("---")
@@ -808,14 +788,21 @@ if search_button:
         if not papers:
             st.warning("📭 No papers found. Try broadening your query or categories.")
         else:
-            st.success(f"✅ Found **{len(papers)}** relevant papers (relevance > {min_relevance}%).")
+            # Apply filters
+            filtered_papers = []
+            for paper in papers:
+                if require_eis and paper["eis_score"] == 0:
+                    continue
+                if require_ai and paper["ai_score"] == 0:
+                    continue
+                if paper["relevance_prob"] < min_relevance:
+                    continue
+                filtered_papers.append(paper)
             
-            # Filter by relevance threshold
-            relevant_papers = [p for p in papers if p["relevance_prob"] > min_relevance]
-            if not relevant_papers:
-                st.warning(f"📭 No papers above {min_relevance}% relevance threshold.")
+            if not filtered_papers:
+                st.warning(f"📭 No papers match the filter criteria.")
             else:
-                df = pd.DataFrame(relevant_papers)
+                df = pd.DataFrame(filtered_papers)
                 st.session_state.papers_df = df
                 
                 # Save to metadata DB
@@ -826,45 +813,86 @@ if search_button:
                 update_log(f"Saved {len(df)} papers to metadata DB")
                 
                 # Display summary metrics
-                col1, col2, col3 = st.columns(3)
+                st.success(f"✅ Found **{len(df)}** relevant papers.")
+                
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.metric("Papers Found", len(df))
                 with col2:
                     avg_rel = df['relevance_prob'].mean()
-                    st.metric("Average Relevance", f"{avg_rel:.1f}%")
+                    st.metric("Avg Relevance", f"{avg_rel:.1f}%")
                 with col3:
-                    year_range = f"{df['year'].min()}-{df['year'].max()}"
-                    st.metric("Year Range", year_range)
+                    avg_eis = df['eis_score'].mean()
+                    st.metric("Avg EIS Score", f"{avg_eis:.1f}")
+                with col4:
+                    avg_ai = df['ai_score'].mean()
+                    st.metric("Avg AI Score", f"{avg_ai:.1f}")
                 
-                # Display papers
-                st.subheader("📚 Relevant Papers")
-                for idx, paper in df.iterrows():
-                    with st.expander(f"📄 **{paper['title']}** ({paper['year']}) — **{paper['relevance_prob']}%**"):
-                        st.markdown(f"**Authors**: {paper['authors']}")
-                        st.markdown(f"**Categories**: `{paper['categories']}`")
-                        st.markdown(f"**Matched Terms**: `{paper['matched_terms']}`")
+                # Display papers in tabs
+                tab1, tab2 = st.tabs(["📄 Paper List", "📊 Analysis"])
+                
+                with tab1:
+                    # Display papers
+                    for idx, paper in df.iterrows():
+                        with st.expander(f"**{paper['title']}** ({paper['year']}) — ⚡{paper['relevance_prob']}% | 🧪{paper['eis_score']} | 🤖{paper['ai_score']}"):
+                            st.markdown(f"**Authors**: {paper['authors']}")
+                            st.markdown(f"**Categories**: `{paper['categories']}`")
+                            st.markdown(f"**Matched Terms**: `{paper['matched_terms']}`")
+                            
+                            st.markdown("### Abstract")
+                            st.markdown(paper["abstract_highlighted"], unsafe_allow_html=True)
+                            
+                            col_btn, col_links = st.columns([1, 3])
+                            with col_btn:
+                                # Unique key using paper ID
+                                if st.button("📥 Download PDF", key=f"download_{paper['id']}"):
+                                    with st.spinner("Downloading and extracting text..."):
+                                        success = handle_pdf_download(paper["id"], paper["pdf_url"], paper.to_dict())
+                                        if success:
+                                            st.success("✅ PDF downloaded and indexed!")
+                            with col_links:
+                                abs_url = paper['pdf_url'].replace('/pdf/', '/abs/')
+                                st.markdown(f"[🌐 View on arXiv]({abs_url}) | [📄 Direct PDF]({paper['pdf_url']})")
+                
+                with tab2:
+                    # Analysis plots
+                    if len(df) > 0:
+                        st.subheader("📈 Analysis of Results")
                         
-                        # EIS and AI indicators
-                        col_eis, col_ai = st.columns(2)
-                        with col_eis:
-                            st.success("✅ Contains EIS") if paper['has_eis'] else st.error("❌ No EIS")
-                        with col_ai:
-                            st.success("✅ Contains AI/ML") if paper['has_ai'] else st.error("❌ No AI/ML")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            # Year distribution
+                            year_counts = df['year'].value_counts().sort_index()
+                            st.bar_chart(year_counts)
+                            st.caption("Papers by Year")
                         
-                        st.markdown("### Abstract")
-                        st.markdown(paper["abstract_highlighted"], unsafe_allow_html=True)
+                        with col2:
+                            # Relevance distribution
+                            relevance_bins = pd.cut(df['relevance_prob'], bins=[0, 30, 50, 70, 90, 100])
+                            bin_counts = relevance_bins.value_counts().sort_index()
+                            st.bar_chart(bin_counts)
+                            st.caption("Relevance Distribution")
                         
-                        col_btn, col_links = st.columns([1, 3])
-                        with col_btn:
-                            # Unique key using paper ID
-                            if st.button("📥 Download PDF", key=f"download_{paper['id']}"):
-                                with st.spinner("Downloading and extracting text..."):
-                                    success = handle_pdf_download(paper["id"], paper["pdf_url"], paper.to_dict())
-                                    if success:
-                                        st.success("✅ PDF downloaded and indexed!")
-                        with col_links:
-                            abs_url = paper['pdf_url'].replace('/pdf/', '/abs/')
-                            st.markdown(f"[🌐 View on arXiv]({abs_url}) | [📄 Direct PDF]({paper['pdf_url']})")
+                        # Top terms
+                        st.subheader("🔤 Most Common Terms")
+                        all_terms = []
+                        for terms in df['matched_terms']:
+                            if terms != 'None':
+                                all_terms.extend([t.strip() for t in terms.split(',')])
+                        
+                        if all_terms:
+                            term_counts = pd.Series(all_terms).value_counts().head(20)
+                            st.bar_chart(term_counts)
+                        
+                        # Categories analysis
+                        st.subheader("📚 Categories Distribution")
+                        all_cats = []
+                        for cats in df['categories']:
+                            all_cats.extend([c.strip() for c in cats.split(',')])
+                        
+                        if all_cats:
+                            cat_counts = pd.Series(all_cats).value_counts().head(10)
+                            st.dataframe(cat_counts)
 
 # Always show download and inspection section if search was performed
 if st.session_state.search_performed:
@@ -938,33 +966,35 @@ st.markdown("---")
 display_logs()
 
 # Add information section
-with st.expander("ℹ️ About This Tool"):
+with st.expander("ℹ️ About This Tool & Search Tips"):
     st.markdown("""
-    ### EIS + AI/ML Knowledge Explorer
+    ### EIS + AI/ML Knowledge Explorer - Search Tips
     
-    **Purpose**: This tool systematically searches for research papers that combine:
-    1. **Electrochemical Impedance Spectroscopy (EIS)** - A powerful electrochemical technique
-    2. **Artificial Intelligence/Machine Learning (AI/ML)** - Advanced data analysis methods
+    **To get more papers**:
     
-    **Key Features**:
-    - **Mandatory filtering**: Only includes papers with BOTH EIS and AI terms
-    - **Comprehensive coverage**: Searches across multiple arXiv categories
-    - **Intelligent scoring**: Uses SciBERT + regex patterns for relevance scoring
-    - **Full-text extraction**: Downloads and indexes complete paper content
-    - **Section extraction**: Automatically identifies EIS and AI-related sections
+    1. **Use "Auto (Broad)" mode** - Searches with OR logic across all terms
+    2. **Select multiple categories** - Include: physics.chem-ph, cond-mat.mtrl-sci, cs.LG, cs.AI
+    3. **Increase Max Results** - Set to 100-200 for broader search
+    4. **Adjust filters** - Lower minimum relevance to 20-30%
+    5. **Use OR instead of AND** in custom queries
+    
+    **Example effective queries**:
+    
+    - `("electrochemical impedance" OR "EIS") OR ("machine learning" OR "AI")`
+    - `impedance AND (learning OR neural OR network)`
+    - `("battery impedance" OR "EIS") AND (data OR model OR prediction)`
     
     **Applications covered**:
-    - Battery health monitoring and prediction
-    - Corrosion detection and monitoring
-    - Biomedical sensing and diagnostics
-    - Fuel cell and supercapacitor analysis
-    - Automated equivalent circuit fitting
-    - EIS data augmentation and synthesis
+    - Battery health monitoring with ML
+    - Corrosion prediction using neural networks
+    - Automated EIS data analysis
+    - AI-powered electrochemical sensors
+    - Data-driven equivalent circuit fitting
     
-    **AI/ML Techniques covered**:
-    - Machine Learning (ML) and Deep Learning (DL)
-    - Natural Language Processing (NLP) for literature analysis
-    - Neural Networks (CNN, RNN, LSTM, Transformers)
-    - Data-driven modeling and prediction
-    - Automated feature extraction
+    **The tool now**:
+    - Uses broader search terms
+    - Scores papers based on EIS and AI term frequency
+    - Includes papers with either EIS OR AI terms (configurable)
+    - Fetches 4x more papers to filter through
+    - Provides better relevance scoring
     """)
