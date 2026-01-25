@@ -299,33 +299,6 @@ def create_sample_database(query_id="q0"):
             )
             ''')
             
-            # Insert sample data
-            sample_papers = [
-                ("Machine Learning for Electrochemical Impedance Spectroscopy Analysis", 
-                 "This study presents a novel machine learning approach for analyzing Electrochemical Impedance Spectroscopy (EIS) data. Deep neural networks were trained to identify equivalent circuit parameters from Nyquist plots.",
-                 "This comprehensive study presents a novel machine learning approach for analyzing Electrochemical Impedance Spectroscopy (EIS) data. Deep neural networks were trained to identify equivalent circuit parameters from Nyquist plots with 95% accuracy. The model handles complex impedance spectra with multiple time constants. Feature extraction techniques identified key frequency regions that correlate with specific electrochemical processes. The approach reduces analysis time from hours to seconds while maintaining expert-level accuracy.",
-                 2021, "EIS+ML"),
-                
-                ("Physics-Informed Neural Networks for Battery Impedance Modeling", 
-                 "We developed a physics-informed neural network model to predict impedance behavior of lithium-ion batteries. The model incorporates electrochemical principles while learning from experimental data.",
-                 "We developed a physics-informed neural network (PINN) model to predict impedance behavior of lithium-ion batteries under various operating conditions. The model incorporates electrochemical principles while learning from experimental EIS data. The PINN accurately captures the evolution of charge transfer resistance and Warburg impedance across different states of charge. The approach enables real-time impedance prediction without requiring new measurements, reducing computational overhead by 80% compared to traditional equivalent circuit fitting.",
-                 2022, "EIS+PINN"),
-                
-                ("Deep Learning for Automated Equivalent Circuit Extraction from Nyquist Plots", 
-                 "A convolutional neural network was developed to automatically extract equivalent circuit models from Nyquist plots. The system achieves 92% accuracy on benchmark datasets.",
-                 "A convolutional neural network (CNN) was developed to automatically extract equivalent circuit models from Nyquist plots. The system achieves 92% accuracy on benchmark datasets containing 10,000+ impedance spectra from various electrochemical systems. The model identifies circuit elements and their connectivity without human intervention. Transfer learning allows adaptation to new electrochemical systems with minimal training data. The approach significantly reduces the expertise barrier for EIS analysis.",
-                 2023, "EIS+CNN"),
-                
-                ("Gaussian Process Regression for Predicting Battery State of Health from EIS", 
-                 "Gaussian process regression models were applied to predict battery state of health from Electrochemical Impedance Spectroscopy measurements. The approach provides uncertainty quantification.",
-                 "Gaussian process regression (GPR) models were applied to predict battery state of health (SOH) from Electrochemical Impedance Spectroscopy measurements. The approach provides uncertainty quantification for predictions, critical for reliable battery management systems. Feature selection identified impedance at specific frequencies as most predictive of SOH. The model maintains accuracy across different battery chemistries and operating conditions, demonstrating robust generalization capabilities.",
-                 2020, "EIS+GPR"),
-                
-                ("Natural Language Processing for Extracting Electrochemical Parameters from Literature", 
-                 "We developed an NLP pipeline to automatically extract electrochemical parameters from scientific literature. The system identifies impedance values, circuit elements, and experimental conditions.",
-                 "We developed a Natural Language Processing (NLP) pipeline to automatically extract electrochemical parameters from scientific literature. The system identifies impedance values, circuit elements, and experimental conditions from full-text papers with 87% accuracy. Named entity recognition specifically trained for electrochemistry terminology enables precise parameter extraction. The extracted data was used to train machine learning models for impedance prediction, creating a closed-loop knowledge extraction and application system.",
-                 2021, "NLP+EIS")
-            ]
             
             cursor.executemany('''
             INSERT INTO papers (title, abstract, full_text, year, categories)
