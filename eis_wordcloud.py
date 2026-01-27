@@ -16,6 +16,8 @@ import tempfile
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import base64
+import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -60,6 +62,14 @@ st.markdown("""
     margin: 1rem 0;
     border-radius: 0.5rem;
 }
+.file-upload-area {
+    border: 2px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 2rem;
+    text-align: center;
+    background-color: #f8fafc;
+    margin: 1rem 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,7 +84,7 @@ def process_text_numba(text_array):
     results = []
     for i in prange(len(text_array)):
         text = text_array[i]
-        # Simple text cleaning (in practice, this would be more complex)
+        # Simple text cleaning
         cleaned = ""
         for char in text:
             if char.isalnum() or char.isspace():
@@ -84,133 +94,166 @@ def process_text_numba(text_array):
 
 def get_db_paths():
     """
-    Get database paths for the EIS & AI search results.
-    Compatible with the improved search that finds 190 papers.
+    Get database paths with multiple fallback options
     """
-    # Use the same temporary directory as the main app
-    BASE_DIR = Path(tempfile.gettempdir())
+    paths = {}
     
-    return {
-        "Metadata DB": BASE_DIR / "eis_ai_metadata.db",
-        "Universe DB": BASE_DIR / "eis_ai_universe.db"
-    }
+    # Option 1: Check for knowledge_database folder (GitHub repository structure)
+    script_dir = Path(__file__).parent
+    knowledge_db_dir = script_dir / "knowledge_database"
+    
+    if knowledge_db_dir.exists():
+        paths["Local Metadata DB"] = knowledge_db_dir / "metadata.db"
+        paths["Local Universe DB"] = knowledge_db_dir / "universe.db"
+        paths["Local CSV"] = knowledge_db_dir / "eis_ai_results.csv"
+    
+    # Option 2: Check temporary directory (from search app)
+    temp_dir = Path(tempfile.gettempdir())
+    paths["Temp Metadata DB"] = temp_dir / "eis_ai_metadata.db"
+    paths["Temp Universe DB"] = temp_dir / "eis_ai_universe.db"
+    
+    # Option 3: Check for uploaded files in session state
+    if 'uploaded_files' in st.session_state:
+        for file_name, file_data in st.session_state.uploaded_files.items():
+            if file_name.endswith('.db'):
+                paths[f"Uploaded {file_name}"] = file_data
+            elif file_name.endswith('.csv'):
+                paths[f"Uploaded {file_name}"] = file_data
+    
+    return paths
+
+def load_csv_data(csv_path):
+    """Load data from CSV file"""
+    try:
+        df = pd.read_csv(csv_path)
+        logger.info(f"Loaded {len(df)} papers from CSV")
+        return df
+    except Exception as e:
+        logger.error(f"Error loading CSV: {e}")
+        return None
+
+def download_file_from_github(url, local_path):
+    """Download file from GitHub URL"""
+    try:
+        # Convert GitHub URL to raw download URL
+        if 'github.com' in url:
+            url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+        
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        
+        with open(local_path, 'wb') as f:
+            f.write(response.content)
+        
+        logger.info(f"Downloaded file to {local_path}")
+        return True
+    except Exception as e:
+        logger.error(f"Error downloading file: {e}")
+        return False
 
 class DatabaseManager:
-    """Enhanced database manager for SQLite connections with better EIS/AI support"""
+    """Enhanced database manager with multiple data source support"""
     
-    def __init__(self, db_path: str):
-        self.db_path = db_path
+    def __init__(self, data_source):
+        self.data_source = data_source
         self.conn = None
-        logger.info(f"Database manager initialized for {db_path}")
+        self.data_type = self._detect_data_type()
+        logger.info(f"Data manager initialized for {data_source} (type: {self.data_type})")
+    
+    def _detect_data_type(self):
+        """Detect if data source is CSV or DB"""
+        if isinstance(self.data_source, pd.DataFrame):
+            return "dataframe"
+        elif str(self.data_source).endswith('.csv'):
+            return "csv"
+        elif str(self.data_source).endswith('.db'):
+            return "database"
+        else:
+            return "unknown"
     
     def connect(self) -> bool:
-        """Establish database connection"""
+        """Establish connection or load data"""
         try:
-            if not os.path.exists(self.db_path):
-                logger.warning(f"Database file not found: {db_path}")
+            if self.data_type == "dataframe":
+                # Data already loaded
+                return True
+            elif self.data_type == "csv":
+                # Load CSV into DataFrame
+                self.df = pd.read_csv(self.data_source)
+                logger.info(f"Loaded CSV with {len(self.df)} records")
+                return True
+            elif self.data_type == "database":
+                # Connect to SQLite database
+                if not os.path.exists(self.data_source):
+                    logger.warning(f"Database file not found: {self.data_source}")
+                    return False
+                
+                self.conn = sqlite3.connect(self.data_source)
+                logger.info(f"Connected to database: {self.data_source}")
+                return True
+            else:
+                logger.error(f"Unknown data type: {self.data_type}")
                 return False
-            
-            self.conn = sqlite3.connect(self.db_path)
-            logger.info(f"Connected to database: {self.db_path}")
-            return True
         except Exception as e:
-            logger.error(f"Database connection error: {e}")
+            logger.error(f"Connection error: {e}")
             return False
     
-    def get_tables(self) -> list:
-        """Get list of tables in database"""
+    def get_papers_data(self) -> pd.DataFrame:
+        """Get papers data from various sources"""
+        try:
+            if self.data_type == "dataframe":
+                return self.df
+            elif self.data_type == "csv":
+                return self.df
+            elif self.data_type == "database":
+                return self._get_papers_from_db()
+            else:
+                return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Error getting papers data: {e}")
+            return pd.DataFrame()
+    
+    def _get_papers_from_db(self) -> pd.DataFrame:
+        """Get papers from SQLite database"""
         if not self.conn:
-            return []
+            return pd.DataFrame()
         
         try:
             cursor = self.conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = [row[0] for row in cursor.fetchall()]
-            logger.debug(f"Found tables: {tables}")
-            return tables
-        except Exception as e:
-            logger.error(f"Error fetching tables: {e}")
-            return []
-    
-    def get_papers_data(self) -> pd.DataFrame:
-        """Get papers data from database with improved EIS/AI support"""
-        if not self.conn:
-            return pd.DataFrame()
-        
-        try:
-            tables = self.get_tables()
-            target_table = None
             
-            # Look for papers table
+            if not tables:
+                logger.warning("No tables found in database")
+                return pd.DataFrame()
+            
+            # Try to find papers table
+            target_table = None
             for table in tables:
-                if 'paper' in table.lower() or 'document' in table.lower():
+                if 'paper' in table.lower():
                     target_table = table
                     break
             
             if not target_table:
-                logger.warning("No papers table found")
-                return pd.DataFrame()
+                target_table = tables[0]  # Use first table if no papers table found
             
-            # Get columns
-            cursor = self.conn.cursor()
+            # Get table structure
             cursor.execute(f"PRAGMA table_info({target_table})")
             columns = [row[1] for row in cursor.fetchall()]
             
-            # Find text columns - prioritize full_text, then abstract, then content
-            text_columns = [col for col in columns if 'text' in col.lower() or 'content' in col.lower() or 'abstract' in col.lower()]
-            
-            if not text_columns:
-                logger.warning("No text columns found")
-                return pd.DataFrame()
-            
-            # Use the best text column available
-            if 'full_text' in text_columns:
-                text_column = 'full_text'
-            elif 'abstract' in text_columns:
-                text_column = 'abstract'
-            else:
-                text_column = text_columns[0]
-            
             # Build query with available columns
-            select_cols = [text_column]
-            
-            # Add metadata columns if available
-            for col in ['title', 'authors', 'year', 'categories', 'matched_terms', 'relevance_prob']:
-                if col in columns:
-                    select_cols.append(col)
-            
-            # If year not available, use a default
-            if 'year' not in select_cols:
-                select_cols.append("2023 as year")
-            
-            # If title not available, use a default
-            if 'title' not in select_cols:
-                select_cols.append("'No title' as title")
-            
-            # If categories not available, use a default
-            if 'categories' not in select_cols:
-                select_cols.append("'Unknown' as categories")
-            
-            query = f"""
-            SELECT {', '.join(select_cols)}
-            FROM {target_table}
-            WHERE {text_column} IS NOT NULL AND LENGTH({text_column}) > 50
-            ORDER BY 
-                CASE WHEN relevance_prob IS NOT NULL THEN relevance_prob ELSE 0 END DESC,
-                year DESC
-            LIMIT 500
-            """
-            
+            query = f"SELECT * FROM {target_table}"
             df = pd.read_sql_query(query, self.conn)
+            
             logger.info(f"Loaded {len(df)} papers from {target_table}")
             return df
             
         except Exception as e:
-            logger.error(f"Error fetching papers: {e}")
+            logger.error(f"Error fetching from database: {e}")
             return pd.DataFrame()
     
     def disconnect(self):
-        """Close database connection"""
+        """Close connection"""
         if self.conn:
             self.conn.close()
             logger.info("Database connection closed")
@@ -219,7 +262,7 @@ class TextAnalyzer:
     """Enhanced text analysis with EIS/AI-specific processing"""
     
     def __init__(self):
-        # Expanded stopwords with EIS/AI-specific terms that are too common
+        # Expanded stopwords with EIS/AI-specific terms
         self.stopwords = set([
             'using', 'used', 'use', 'paper', 'study', 'research', 'result', 'results', 'method', 'figure', 
             'table', 'shown', 'show', 'fig', 'based', 'high', 'low', 'respectively', 'obtained', 'fabricated',
@@ -229,7 +272,7 @@ class TextAnalyzer:
             'data', 'model', 'analysis', 'approach', 'system', 'process', 'time', 'can', 'also', 'however',
             'therefore', 'thus', 'may', 'could', 'would', 'should', 'might', 'one', 'two', 'first', 'second',
             'et', 'al', 'doi', 'arxiv', 'preprint', 'www', 'http', 'https', 'org', 'com', 'pdf', 'figure',
-            'eis', 'ai', 'ml', 'dl'  # Common acronyms that are too frequent
+            'eis', 'ai', 'ml', 'dl'
         ])
         
         # EIS/AI-specific terms to highlight
@@ -243,6 +286,9 @@ class TextAnalyzer:
     
     def extract_terms(self, texts: list) -> dict:
         """Extract terms from text with Numba acceleration"""
+        if not texts:
+            return {}
+        
         # Convert to numpy array for Numba
         text_array = np.array(texts, dtype='object')
         
@@ -263,6 +309,9 @@ class TextAnalyzer:
     
     def extract_keyphrases(self, texts: list) -> dict:
         """Extract keyphrases (bigrams and trigrams) with EIS/AI focus"""
+        if not texts:
+            return {}
+        
         keyphrases = []
         
         for text in texts:
@@ -290,43 +339,9 @@ class TextAnalyzer:
         # Count frequencies
         phrase_counts = Counter(keyphrases)
         return phrase_counts
-    
-    def extract_trending_terms(self, texts: list, years: list) -> dict:
-        """Extract terms that are trending over time"""
-        # Group texts by year
-        year_to_texts = {}
-        for text, year in zip(texts, years):
-            if year not in year_to_texts:
-                year_to_texts[year] = []
-            year_to_texts[year].append(text)
-        
-        # Extract terms for each year
-        year_to_terms = {}
-        for year, year_texts in year_to_texts.items():
-            term_counts = self.extract_terms(year_texts)
-            year_to_terms[year] = term_counts
-        
-        # Calculate term growth over time
-        sorted_years = sorted(year_to_terms.keys())
-        trending_terms = {}
-        
-        if len(sorted_years) >= 2:
-            for term in set().union(*[terms.keys() for terms in year_to_terms.values()]):
-                # Calculate frequency in each year
-                frequencies = [year_to_terms[year].get(term, 0) for year in sorted_years]
-                
-                # Calculate growth rate (simple linear regression slope)
-                if sum(frequencies) > 5:  # Only consider terms with sufficient frequency
-                    x = np.arange(len(frequencies))
-                    if np.var(x) > 0:  # Avoid division by zero
-                        slope = np.cov(x, frequencies)[0, 1] / np.var(x)
-                        if slope > 0:  # Only consider growing terms
-                            trending_terms[term] = slope
-        
-        return sorted(trending_terms.items(), key=lambda x: x[1], reverse=True)
 
 class VisualizationEngine:
-    """Enhanced publication-quality visualizations with Plotly support"""
+    """Enhanced publication-quality visualizations"""
     
     def __init__(self):
         self.colors = {
@@ -355,152 +370,152 @@ class VisualizationEngine:
         plt.tight_layout(pad=0)
         
         return fig
-    
-    def create_term_trend_chart(self, term_data: dict, title: str = "Term Trend Analysis"):
-        """Create interactive term trend chart using Plotly"""
-        fig = go.Figure()
-        
-        for term, trend_data in term_data.items():
-            fig.add_trace(go.Scatter(
-                x=list(trend_data.keys()),
-                y=list(trend_data.values()),
-                mode='lines+markers',
-                name=term,
-                line=dict(width=2)
-            ))
-        
-        fig.update_layout(
-            title=title,
-            xaxis_title="Year",
-            yaxis_title="Frequency",
-            hovermode='x unified',
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
-        )
-        
-        return fig
-    
-    def create_relevance_distribution(self, df: pd.DataFrame):
-        """Create relevance score distribution chart"""
-        if 'relevance_prob' in df.columns:
-            fig = px.histogram(
-                df, 
-                x="relevance_prob", 
-                nbins=20,
-                title="Distribution of Paper Relevance Scores",
-                labels={"relevance_prob": "Relevance Score (%)", "count": "Number of Papers"},
-                color_discrete_sequence=['#3B82F6']
-            )
-            fig.update_layout(bargap=0.1)
-            return fig
-        return None
-    
-    def create_yearly_publication_trend(self, df: pd.DataFrame):
-        """Create yearly publication trend chart"""
-        if 'year' in df.columns:
-            year_counts = df['year'].value_counts().sort_index()
-            fig = px.line(
-                x=year_counts.index,
-                y=year_counts.values,
-                title="Publication Trend Over Years",
-                labels={"x": "Year", "y": "Number of Papers"},
-                markers=True,
-                color_discrete_sequence=['#10B981']
-            )
-            fig.update_traces(line_width=3)
-            return fig
-        return None
 
 def main():
     """Main Streamlit application"""
-    st.markdown('<h1 class="main-header">🔬 EIS & AI/ML Analysis<br><small>Enhanced Analysis for 190+ Papers</small></h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🔬 EIS & AI/ML Analysis<br><small>Flexible Data Source Support</small></h1>', unsafe_allow_html=True)
     
     # Initialize session state
     if 'analysis_results' not in st.session_state:
         st.session_state.analysis_results = None
-    
     if 'extractor' not in st.session_state:
         st.session_state.extractor = TextAnalyzer()
-    
     if 'viz_engine' not in st.session_state:
         st.session_state.viz_engine = VisualizationEngine()
+    if 'uploaded_files' not in st.session_state:
+        st.session_state.uploaded_files = {}
     
     # Sidebar configuration
     with st.sidebar:
-        st.header("⚙️ Configuration")
+        st.header("⚙️ Data Source Configuration")
         
-        # Get database paths
-        db_paths = get_db_paths()
+        # Data source selection
+        data_source_option = st.selectbox(
+            "Select Data Source",
+            ["Auto-detect", "Upload Files", "GitHub URL", "Local Files"]
+        )
         
-        # Database selection
-        available_dbs = []
-        for db_name, db_path in db_paths.items():
-            if db_path.exists():
-                available_dbs.append(db_name)
+        selected_source = None
+        source_type = None
         
-        if not available_dbs:
-            st.warning("No databases found! Please run the EIS & AI search first.")
-            st.info("The search will create databases in the temporary directory.")
-            return
+        if data_source_option == "Auto-detect":
+            st.subheader("🔍 Auto-detecting Data Sources...")
+            db_paths = get_db_paths()
+            
+            available_sources = []
+            for name, path in db_paths.items():
+                if isinstance(path, Path) and path.exists():
+                    available_sources.append((name, path))
+                elif isinstance(path, pd.DataFrame):
+                    available_sources.append((name, path))
+            
+            if available_sources:
+                st.success(f"Found {len(available_sources)} data source(s)!")
+                source_names = [name for name, _ in available_sources]
+                selected_name = st.selectbox("Select source", source_names)
+                selected_source = next(path for name, path in available_sources if name == selected_name)
+                source_type = "auto-detected"
+            else:
+                st.warning("No data sources found. Please upload files or provide a GitHub URL.")
         
-        selected_db = st.selectbox("Select Database", available_dbs)
-        selected_db_path = db_paths[selected_db]
+        elif data_source_option == "Upload Files":
+            st.subheader("📁 Upload Data Files")
+            
+            uploaded_file = st.file_uploader(
+                "Upload CSV or DB file",
+                type=['csv', 'db'],
+                help="Upload your eis_ai_results.csv or metadata.db file"
+            )
+            
+            if uploaded_file:
+                # Save uploaded file to session state
+                file_ext = uploaded_file.name.split('.')[-1]
+                temp_path = Path(tempfile.gettempdir()) / f"uploaded_{uploaded_file.name}"
+                
+                with open(temp_path, 'wb') as f:
+                    f.write(uploaded_file.getbuffer())
+                
+                st.session_state.uploaded_files[uploaded_file.name] = temp_path
+                st.success(f"Uploaded {uploaded_file.name}")
+                selected_source = temp_path
+                source_type = "uploaded"
         
-        # Display database path
-        st.markdown(f"""
-        <div style="background-color: #FEF7CD; padding: 0.5rem; border-radius: 4px; font-size: 0.85em;">
-            <strong>Database Path:</strong><br>{selected_db_path}
-        </div>
-        """, unsafe_allow_html=True)
+        elif data_source_option == "GitHub URL":
+            st.subheader("🔗 GitHub URL")
+            github_url = st.text_input(
+                "Enter GitHub URL",
+                placeholder="https://github.com/username/repo/blob/main/knowledge_database/eis_ai_results.csv"
+            )
+            
+            if github_url and st.button("Download from GitHub"):
+                # Determine file type and local path
+                if github_url.endswith('.csv'):
+                    local_path = Path(tempfile.gettempdir()) / "downloaded_results.csv"
+                elif github_url.endswith('.db'):
+                    local_path = Path(tempfile.gettempdir()) / "downloaded_metadata.db"
+                else:
+                    st.error("URL must end with .csv or .db")
+                    return
+                
+                if download_file_from_github(github_url, local_path):
+                    st.success(f"Downloaded to {local_path}")
+                    selected_source = local_path
+                    source_type = "downloaded"
+                else:
+                    st.error("Failed to download file")
+        
+        elif data_source_option == "Local Files":
+            st.subheader("📂 Local File Paths")
+            local_path = st.text_input(
+                "Enter full path to file",
+                placeholder="/path/to/your/knowledge_database/eis_ai_results.csv"
+            )
+            
+            if local_path and Path(local_path).exists():
+                selected_source = Path(local_path)
+                source_type = "local"
+                st.success(f"Found file at {local_path}")
+            elif local_path:
+                st.error("File not found at specified path")
         
         # Analysis parameters
-        st.subheader("Analysis Parameters")
-        max_papers = st.slider("Max papers to analyze", 10, 500, 200, 10)
-        min_term_freq = st.slider("Min term frequency", 1, 20, 3)
-        
-        # Word cloud settings
-        st.subheader("Word Cloud Settings")
-        max_words = st.slider("Max words in cloud", 10, 300, 150)
-        colormap = st.selectbox("Color scheme", 
-                               ["viridis", "plasma", "inferno", "magma", "Blues", "Greens", "Reds"])
-        
-        # Processing options
-        st.subheader("Processing Options")
-        use_numba = st.checkbox("Enable Numba JIT Acceleration", value=True)
-        extract_keyphrases = st.checkbox("Extract Keyphrases (Bigrams/Trigrams)", value=True)
-        analyze_trends = st.checkbox("Analyze Term Trends Over Time", value=True)
-        
-        # Actions
-        st.subheader("Actions")
-        analyze_btn = st.button("🚀 Start Analysis", type="primary", use_container_width=True)
-        
-        if st.button("🔄 Reset Session", use_container_width=True):
-            st.session_state.analysis_results = None
-            st.rerun()
+        if selected_source:
+            st.subheader("⚙️ Analysis Parameters")
+            max_papers = st.slider("Max papers to analyze", 10, 500, 200, 10)
+            min_term_freq = st.slider("Min term frequency", 1, 20, 3)
+            
+            # Word cloud settings
+            st.subheader("☁️ Word Cloud Settings")
+            max_words = st.slider("Max words in cloud", 10, 300, 150)
+            colormap = st.selectbox("Color scheme", 
+                                   ["viridis", "plasma", "inferno", "magma", "Blues", "Greens", "Reds"])
+            
+            # Processing options
+            st.subheader("🔧 Processing Options")
+            use_numba = st.checkbox("Enable Numba JIT Acceleration", value=True)
+            extract_keyphrases = st.checkbox("Extract Keyphrases (Bigrams/Trigrams)", value=True)
+            
+            # Action button
+            analyze_btn = st.button("🚀 Start Analysis", type="primary", use_container_width=True)
     
     # Main analysis workflow
-    if analyze_btn:
-        with st.spinner(f"🔬 Analyzing EIS & AI/ML data with Numba acceleration..."):
+    if 'selected_source' in locals() and selected_source and analyze_btn:
+        with st.spinner(f"🔬 Analyzing EIS & AI/ML data..."):
             try:
-                # Initialize database manager
-                db_manager = DatabaseManager(str(selected_db_path))
+                # Initialize data manager
+                data_manager = DatabaseManager(selected_source)
                 
-                if not db_manager.connect():
-                    st.error("Failed to connect to database!")
+                if not data_manager.connect():
+                    st.error("Failed to connect/load data source!")
                     return
                 
                 # Load papers
-                st.text("📥 Loading papers from database...")
-                papers_df = db_manager.get_papers_data()
+                st.text("📥 Loading papers...")
+                papers_df = data_manager.get_papers_data()
                 
                 if papers_df.empty:
-                    st.error("No papers found in database!")
-                    db_manager.disconnect()
+                    st.error("No papers found in data source!")
+                    data_manager.disconnect()
                     return
                 
                 # Limit papers for performance
@@ -509,30 +524,26 @@ def main():
                 # Extract text content
                 st.text("📝 Extracting text content...")
                 texts = []
-                years = []
                 
                 for idx, row in papers_df.iterrows():
-                    # Try to get full text first
-                    if 'full_text' in row and pd.notna(row['full_text']) and len(str(row['full_text'])) > 50:
-                        texts.append(str(row['full_text']))
-                    elif 'abstract' in row and pd.notna(row['abstract']) and len(str(row['abstract'])) > 50:
-                        texts.append(str(row['abstract']))
-                    else:
-                        continue  # Skip if no valid text
+                    # Try different text columns
+                    text_content = None
                     
-                    # Extract year
-                    if 'year' in row and pd.notna(row['year']):
-                        years.append(int(row['year']))
-                    else:
-                        years.append(2023)  # Default year
+                    for col in ['full_text', 'abstract', 'content', 'summary']:
+                        if col in papers_df.columns and pd.notna(row[col]):
+                            text_content = str(row[col])
+                            break
+                    
+                    if text_content and len(text_content) > 50:
+                        texts.append(text_content)
                 
                 if not texts:
                     st.error("No valid text content found!")
-                    db_manager.disconnect()
+                    data_manager.disconnect()
                     return
                 
-                # Term extraction with Numba acceleration
-                st.text("⚡ Extracting terms with Numba JIT acceleration...")
+                # Term extraction
+                st.text("⚡ Extracting terms...")
                 if extract_keyphrases:
                     term_counts = st.session_state.extractor.extract_keyphrases(texts)
                 else:
@@ -542,52 +553,40 @@ def main():
                 filtered_terms = {term: count for term, count in term_counts.items() 
                                 if count >= min_term_freq and len(term.split()) <= 3}
                 
-                if not filtered_terms:
-                    st.warning("No terms meet the frequency threshold! Try lowering the minimum frequency.")
-                
-                # Trend analysis
-                trend_results = None
-                if analyze_trends and len(set(years)) > 1:
-                    st.text("📈 Analyzing term trends over time...")
-                    trend_results = st.session_state.extractor.extract_trending_terms(texts, years)
-                
                 # Store results
                 st.session_state.analysis_results = {
                     'papers': papers_df,
                     'term_counts': filtered_terms,
-                    'trend_results': trend_results,
-                    'years': years
+                    'source_type': source_type,
+                    'source_path': str(selected_source)
                 }
                 
                 st.success(f"✅ Analysis complete! Found {len(filtered_terms)} unique terms in {len(texts)} papers.")
                 
                 # Show summary metrics
                 with st.expander("📊 Analysis Summary"):
-                    col1, col2, col3, col4 = st.columns(4)
+                    col1, col2, col3 = st.columns(3)
                     col1.metric("Papers Analyzed", len(texts))
                     col2.metric("Unique Terms", len(filtered_terms))
-                    col3.metric("Years Spanned", f"{min(years)}-{max(years)}")
-                    col4.metric("Top Term", max(filtered_terms.items(), key=lambda x: x[1])[0] if filtered_terms else "N/A")
-            
+                    col3.metric("Data Source", source_type)
+                
+                data_manager.disconnect()
+                
             except Exception as e:
                 st.error(f"Analysis failed: {str(e)}")
                 logger.error(f"Analysis failed: {str(e)}", exc_info=True)
-            finally:
-                if 'db_manager' in locals():
-                    db_manager.disconnect()
     
     # Results display
     if st.session_state.analysis_results:
         results = st.session_state.analysis_results
         term_counts = results['term_counts']
         papers_df = results['papers']
-        years = results['years']
-        trend_results = results['trend_results']
         
         st.markdown("### 📊 Analysis Results")
+        st.info(f"Data source: {results['source_type']} - {results['source_path']}")
         
-        # Create tabs for different visualizations
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Word Cloud", "Term List", "Trends", "Database Stats", "Interactive Charts"])
+        # Create tabs
+        tab1, tab2, tab3 = st.tabs(["Word Cloud", "Term List", "Data Preview"])
         
         with tab1:
             if term_counts:
@@ -603,19 +602,13 @@ def main():
                 
                 st.pyplot(fig)
                 
-                add_caption(r"""
-                **Methodology**: Term frequency visualized with $\text{size} \propto \log(1 + f_i)$,
-                where $f_i$ is the raw frequency of term $i$. Common stopwords and noise terms removed.
-                High-resolution (300 DPI) suitable for publication. Numba JIT acceleration used for text processing.
-                """)
-                
                 # Download option
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', dpi=300, bbox_inches='tight')
                 st.download_button(
-                    "📥 Download High-Resolution Word Cloud",
+                    "📥 Download Word Cloud",
                     buf.getvalue(),
-                    f"wordcloud_eis_ai.png",
+                    "wordcloud_eis_ai.png",
                     "image/png"
                 )
             else:
@@ -638,136 +631,25 @@ def main():
                 st.dataframe(filtered_df, use_container_width=True)
                 
                 # Download options
-                col1, col2 = st.columns(2)
-                with col1:
-                    csv = filtered_df.to_csv(index=False).encode('utf-8')
-                    st.download_button("📥 Download CSV", csv, "terms.csv", "text/csv")
-                with col2:
-                    st.download_button("📊 Download Excel", 
-                                     filtered_df.to_excel(index=False).encode('utf-8'),
-                                     "terms.xlsx", 
-                                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                csv = filtered_df.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Download CSV", csv, "terms.csv", "text/csv")
             else:
                 st.info("No terms available.")
         
         with tab3:
-            st.subheader("📈 Term Trend Analysis")
+            st.subheader("📄 Data Preview")
+            st.write(f"Shape: {papers_df.shape}")
+            st.dataframe(papers_df.head(10), use_container_width=True)
             
-            if trend_results:
-                st.markdown("### 🔥 Trending Terms (Growing in Frequency)")
-                
-                # Display top trending terms
-                top_trends = trend_results[:10] if len(trend_results) > 10 else trend_results
-                
-                for term, slope in top_trends:
-                    st.markdown(f"**{term}**: Growth rate = {slope:.2f}")
-                
-                # Create trend chart for top terms
-                if len(top_trends) > 0:
-                    # Get data for top 5 trending terms
-                    top_terms = [term for term, _ in top_trends[:5]]
-                    
-                    # Calculate term frequency by year
-                    term_by_year = {}
-                    for term in top_terms:
-                        term_by_year[term] = {}
-                        
-                        for year, text in zip(years, texts):
-                            if year not in term_by_year[term]:
-                                term_by_year[term][year] = 0
-                            
-                            # Simple count (in a real app, this would be more sophisticated)
-                            term_by_year[term][year] += text.lower().count(term.lower())
-                    
-                    # Create trend chart
-                    trend_fig = st.session_state.viz_engine.create_term_trend_chart(
-                        term_by_year, 
-                        "Frequency of Top Trending Terms Over Time"
-                    )
-                    st.plotly_chart(trend_fig, use_container_width=True)
-            else:
-                st.info("No trend data available. This might be because all papers are from the same year or trend analysis was disabled.")
-        
-        with tab4:
-            st.subheader("📈 Database Statistics")
-            
-            st.markdown(f"""
-            **Database Information:**
-            - **Papers Analyzed**: {len(papers_df)}
-            - **Unique Terms**: {len(term_counts)}
-            - **Database File**: {Path(selected_db_path).name}
-            - **Processing**: {'Numba JIT Accelerated' if use_numba else 'Standard Python'}
-            - **Years Spanned**: {min(years)}-{max(years)}
-            """)
-            
-            if not papers_df.empty:
-                st.markdown("### 📅 Publication Years")
-                year_counts = papers_df['year'].value_counts().sort_index()
-                st.bar_chart(year_counts)
-                
-                if 'categories' in papers_df.columns:
-                    st.markdown("### 🏷️ Categories")
-                    category_counts = papers_df['categories'].value_counts()
-                    st.bar_chart(category_counts)
-                
-                if 'relevance_prob' in papers_df.columns:
-                    st.markdown("### 📊 Relevance Scores")
-                    st.write(papers_df['relevance_prob'].describe())
-                
-                st.markdown("### 📄 Sample Papers")
-                for i, row in papers_df.head(3).iterrows():
-                    with st.expander(f"📄 {row.get('title', 'No title')} ({row.get('year', 'Unknown')})"):
-                        if 'authors' in row and pd.notna(row['authors']):
-                            st.markdown(f"**Authors:** {row['authors']}")
-                        if 'categories' in row and pd.notna(row['categories']):
-                            st.markdown(f"**Category:** {row['categories']}")
-                        if 'relevance_prob' in row and pd.notna(row['relevance_prob']):
-                            st.markdown(f"**Relevance:** {row['relevance_prob']}%")
-                        if 'matched_terms' in row and pd.notna(row['matched_terms']):
-                            st.markdown(f"**Matched Terms:** {row['matched_terms']}")
-                        if 'abstract' in row and pd.notna(row['abstract']):
-                            st.markdown(f"**Abstract:** {row['abstract'][:300]}...")
-            
-            # Performance metrics
-            st.markdown("### ⚡ Performance Metrics")
-            st.markdown(f"""
-            **Numba JIT Acceleration:**
-            - Text processing: {'Enabled' if use_numba else 'Disabled'}
-            - Parallel execution: {'Enabled' if use_numba else 'Disabled'}
-            - Memory optimization: {'Enabled' if use_numba else 'Disabled'}
-            
-            **Analysis Statistics:**
-            - Total terms before filtering: {len(term_counts) + len({k:v for k,v in term_counts.items() if v < min_term_freq})}
-            - Terms after frequency filtering: {len(term_counts)}
-            - Average terms per paper: {len(term_counts) / len(papers_df):.1f}
-            """)
-        
-        with tab5:
-            st.subheader("📊 Interactive Charts")
-            
-            # Relevance distribution
-            relevance_fig = st.session_state.viz_engine.create_relevance_distribution(papers_df)
-            if relevance_fig:
-                st.plotly_chart(relevance_fig, use_container_width=True)
-            
-            # Yearly publication trend
-            trend_fig = st.session_state.viz_engine.create_yearly_publication_trend(papers_df)
-            if trend_fig:
-                st.plotly_chart(trend_fig, use_container_width=True)
-            
-            # Top terms bar chart
-            if term_counts:
-                top_terms = dict(sorted(term_counts.items(), key=lambda x: x[1], reverse=True)[:20])
-                terms_fig = px.bar(
-                    x=list(top_terms.values()),
-                    y=list(top_terms.keys()),
-                    orientation='h',
-                    title="Top 20 Terms by Frequency",
-                    labels={"x": "Frequency", "y": "Term"},
-                    color_discrete_sequence=['#3B82F6']
-                )
-                terms_fig.update_layout(yaxis={'categoryorder': 'total ascending'})
-                st.plotly_chart(terms_fig, use_container_width=True)
+            # Column info
+            st.subheader("📋 Column Information")
+            col_info = pd.DataFrame({
+                'Column': papers_df.columns,
+                'Data Type': papers_df.dtypes.values,
+                'Non-Null Count': papers_df.count().values,
+                'Sample Values': [str(papers_df[col].iloc[0]) if len(papers_df) > 0 and pd.notna(papers_df[col].iloc[0]) else 'N/A' for col in papers_df.columns]
+            })
+            st.dataframe(col_info, use_container_width=True)
 
 if __name__ == "__main__":
     main()
