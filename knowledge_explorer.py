@@ -1,4 +1,4 @@
-Knowledge explorer previous-13 papers
+
 
 import arxiv
 import fitz  # PyMuPDF
