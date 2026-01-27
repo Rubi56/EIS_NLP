@@ -1,3 +1,5 @@
+Knowledge explorer previous-13 papers
+
 import arxiv
 import fitz  # PyMuPDF
 import pandas as pd
@@ -118,34 +120,23 @@ def normalize_text(text):
         text = text.replace(greek, latin)
     return text.lower()
 
-# Expanded core terms (EIS) - more variations
-EIS_CORE = [
-    "EIS", "Electrochemical Impedance Spectroscopy", "Impedance Spectra", 
-    "Nyquist", "Bode plot", "electrochemical impedance", "impedance spectroscopy",
-    "electrochemical impedance analysis", "impedance measurement", "impedance data",
-    "impedance response", "electrochemical impedance", "impedance analysis",
-    "electrochemical analysis", "impedance spectrum", "impedance spectroscopy",
-    "electrochemical system", "impedance modeling", "impedance characterization"
-]
+# Mandatory core terms (EIS)
+EIS_CORE = ["EIS", "Electrochemical Impedance Spectroscopy", "Impedance Spectra", "Nyquist", "Bode plot"]
 
-# Expanded AI/ML terms
+# AI/ML terms
 AI_TERMS = [
     "Machine Learning", "Deep Learning", "Neural Network", "Artificial Intelligence", 
     "Data-driven", "Physics-informed", "NLP", "Natural Language Processing", 
     "Random Forest", "SVM", "CNN", "LSTM", "Transformers", "Gaussian Process", 
     "Bayesian optimization", "Predictive modeling", "Reinforcement learning",
-    "Feature extraction", "Autoencoder", "AI", "ML", "DL", "PINN", "PINNs",
-    "artificial neural network", "deep neural network", "convolutional neural network",
-    "recurrent neural network", "supervised learning", "unsupervised learning",
-    "regression", "classification", "clustering", "dimensionality reduction",
-    "feature selection", "model training", "prediction", "forecasting"
+    "Feature extraction", "Autoencoder"
 ]
 
-# Expanded keywords for regex scoring
+# Combined keywords for regex scoring
 KEY_PATTERNS = [
     r'\belectrochemical impedance spectroscopy\b',
     r'\beis\b',
-    r'\bimpedance (?:spectra|spectroscopy|measurements|data|analysis|response|modeling|characterization)\b',
+    r'\bimpedance (?:spectra|spectroscopy|measurements|data)\b',
     r'\bnyquist\b',
     r'\bbode\b',
     r'\bequivalent circuit model\b',
@@ -163,14 +154,7 @@ KEY_PATTERNS = [
     r'\bbayesian\b',
     r'\bstate of charge\b',
     r'\bstate of health\b',
-    r'\bbattery (?:modeling|diagnosis|estimation)\b',
-    r'\bfuel cell\b',
-    r'\bsupercapacitor\b',
-    r'\belectrolyte\b',
-    r'\belectrode\b',
-    r'\bcorrosion\b',
-    r'\bbiosensor\b',
-    r'\bimpedance tomography\b'
+    r'\bbattery (?:modeling|diagnosis|estimation)\b'
 ]
 
 @st.cache_data
@@ -196,27 +180,27 @@ def score_abstract_with_scibert(abstract):
         num_matched = sum(1 for pat in COMPILED_PATTERNS if pat.search(abstract_normalized))
         
         # Mandatory Check: Must mention EIS or Spectroscopy
-        is_eis = any(term.lower() in abstract_normalized for term in ["eis", "impedance", "spectroscopy", "nyquist", "bode"])
+        is_eis = any(term.lower() in abstract_normalized for term in ["eis", "impedance", "spectroscopy"])
         # Mandatory Check: Must mention AI/Data-driven concepts
-        is_ai = any(term.lower() in abstract_normalized for term in ["learning", "intelligence", "neural", "data", "driven", "model", "prediction", "ai", "ml", "dl"])
+        is_ai = any(term.lower() in abstract_normalized for term in ["learning", "intelligence", "neural", "data", "driven"])
         
         base_score = np.sqrt(num_matched) / np.sqrt(len(KEY_PATTERNS))
         
-        if not is_eis: base_score *= 0.2  # Reduced penalty
-        if not is_ai: base_score *= 0.7   # Reduced penalty
+        if not is_eis: base_score *= 0.1  # Penalize if no EIS
+        if not is_ai: base_score *= 0.5   # Penalize if no AI
             
         # Attention boost for intersection keywords
         tokens = scibert_tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
         keyword_indices = [
             i for i, token in enumerate(tokens)
-            if any(kw in token.lower() for kw in ['impedance', 'eis', 'nyquist', 'ml', 'neural', 'learning', 'model', 'prediction'])
+            if any(kw in token.lower() for kw in ['impedance', 'eis', 'nyquist', 'ml', 'neural', 'learning'])
         ]
         
         if keyword_indices:
             attentions = outputs.attentions[-1][0, 0].numpy()
             attn_score = np.sum(attentions[keyword_indices, :]) / len(keyword_indices)
-            if attn_score > 0.03:  # Lowered threshold
-                base_score = min(base_score + 0.2, 1.0)  # Increased boost
+            if attn_score > 0.05:
+                base_score = min(base_score + 0.15, 1.0)
 
         return base_score
     except:
@@ -251,83 +235,49 @@ def init_db(db_path):
 def query_arxiv_eis_ai(categories, max_results, start_year, end_year):
     try:
         client = arxiv.Client()
+        # Complex query to force intersection
+        query_str = '( "Electrochemical Impedance Spectroscopy" OR "EIS" OR "Impedance Spectra" ) AND ' \
+                    '( "Machine Learning" OR "Deep Learning" OR "Data-driven" OR "Neural Network" OR "Artificial Intelligence" )'
         
-        # Multiple search strategies to maximize results
+        search = arxiv.Search(
+            query=query_str,
+            max_results=max_results * 3, # Over-fetch for filtering
+            sort_by=arxiv.SortCriterion.Relevance
+        )
         
-        # Strategy 1: Broad query with OR conditions
-        broad_query = '( "Electrochemical Impedance Spectroscopy" OR "EIS" OR "Impedance Spectra" OR "impedance spectroscopy" OR "electrochemical impedance" OR "impedance analysis" ) AND ' \
-                     '( "Machine Learning" OR "Deep Learning" OR "Data-driven" OR "Neural Network" OR "Artificial Intelligence" OR "AI" OR "ML" OR "DL" OR "modeling" OR "prediction" )'
-        
-        # Strategy 2: Battery-focused query
-        battery_query = '( "battery" OR "fuel cell" OR "supercapacitor" OR "electrolyzer" ) AND ' \
-                       '( "impedance" OR "EIS" ) AND ' \
-                       '( "Machine Learning" OR "Deep Learning" OR "Neural Network" OR "AI" OR "modeling" )'
-        
-        # Strategy 3: Electrochemistry-focused query
-        electrochem_query = '( "electrochemistry" OR "electrochemical" ) AND ' \
-                           '( "impedance" OR "EIS" ) AND ' \
-                           '( "Machine Learning" OR "Deep Learning" OR "Neural Network" OR "AI" )'
-        
-        # Strategy 4: Corrosion-focused query
-        corrosion_query = '( "corrosion" OR "coating" ) AND ' \
-                         '( "impedance" OR "EIS" ) AND ' \
-                         '( "Machine Learning" OR "Deep Learning" OR "Neural Network" OR "AI" )'
-        
-        # Strategy 5: Biosensor-focused query
-        biosensor_query = '( "biosensor" OR "bioelectrochemistry" ) AND ' \
-                         '( "impedance" OR "EIS" ) AND ' \
-                         '( "Machine Learning" OR "Deep Learning" OR "Neural Network" OR "AI" )'
-        
-        queries = [broad_query, battery_query, electrochem_query, corrosion_query, biosensor_query]
-        
-        all_papers = []
+        papers = []
         seen_ids = set()
         
-        for query in queries:
-            update_log(f"Running query: {query[:100]}...")
-            search = arxiv.Search(
-                query=query,
-                max_results=max_results * 5,  # Increased over-fetch
-                sort_by=arxiv.SortCriterion.Relevance
-            )
+        for result in client.results(search):
+            if not (start_year <= result.published.year <= end_year): continue
+            if not any(cat in result.categories for cat in categories): continue
             
-            for result in client.results(search):
-                if not (start_year <= result.published.year <= end_year): 
-                    continue
-                
-                # Check if any of the selected categories match
-                if not any(cat in result.categories for cat in categories): 
-                    continue
-                
-                paper_id = result.get_short_id()
-                if paper_id in seen_ids: 
-                    continue
-                seen_ids.add(paper_id)
-                
-                rel_score = score_abstract_with_scibert(result.summary)
-                if rel_score < 0.15:  # Lowered threshold
-                    continue
-                
-                # Identify matched terms for the UI
-                abstract_lower = result.summary.lower()
-                found = [t for t in (EIS_CORE + AI_TERMS) if t.lower() in abstract_lower]
+            paper_id = result.get_short_id()
+            if paper_id in seen_ids: continue
+            seen_ids.add(paper_id)
+            
+            rel_score = score_abstract_with_scibert(result.summary)
+            if rel_score < 0.25: continue # Threshold
+            
+            # Identify matched terms for the UI
+            abstract_lower = result.summary.lower()
+            found = [t for t in (EIS_CORE + AI_TERMS) if t.lower() in abstract_lower]
 
-                all_papers.append({
-                    "id": paper_id,
-                    "title": result.title,
-                    "authors": ", ".join([a.name for a in result.authors]),
-                    "year": result.published.year,
-                    "categories": ", ".join(result.categories),
-                    "abstract": result.summary,
-                    "pdf_url": result.pdf_url,
-                    "matched_terms": ", ".join(found),
-                    "relevance_prob": round(rel_score * 100, 2),
-                    "query_type": query.split('(')[0].strip()
-                })
-        
-        # Sort by relevance and return top results
-        all_papers = sorted(all_papers, key=lambda x: x["relevance_prob"], reverse=True)
-        return all_papers[:max_results]
+            papers.append({
+                "id": paper_id,
+                "title": result.title,
+                "authors": ", ".join([a.name for a in result.authors]),
+                "year": result.published.year,
+                "categories": ", ".join(result.categories),
+                "abstract": result.summary,
+                "pdf_url": result.pdf_url,
+                "matched_terms": ", ".join(found),
+                "relevance_prob": round(rel_score * 100, 2)
+            })
+            
+            if len(papers) >= max_results: break
+            
+        return sorted(papers, key=lambda x: x["relevance_prob"], reverse=True)
     except Exception as e:
         st.error(f"Search failed: {e}")
         return []
@@ -363,18 +313,17 @@ def handle_pdf_download(paper_id, pdf_url, paper_metadata):
 # ==============================
 with st.sidebar:
     st.header("⚙️ Configuration")
-    max_res = st.slider("Max Results", 10, 1000, 200)  # Increased default and max
+    max_res = st.slider("Max Results", 10, 500, 100)
     
     col_y1, col_y2 = st.columns(2)
     with col_y1:
-        s_year = st.number_input("From", 2000, 2026, 2010)  # Extended range
+        s_year = st.number_input("From", 2010, 2026, 2010)
     with col_y2:
-        e_year = st.number_input("To", 2000, 2026, 2026)
+        e_year = st.number_input("To", 2010, 2026, 2026)
         
     cats = st.multiselect("Categories", 
-                          ["stat.ML", "cs.LG", "physics.chem-ph", "physics.app-ph", "electro-chem", 
-                           "physics.comp-ph", "cs.AI", "cs.NE", "eess.SP"],  # Added more categories
-                          default=["stat.ML", "cs.LG", "physics.chem-ph", "physics.app-ph"])
+                          ["stat.ML", "cs.LG", "physics.chem-ph", "physics.app-ph", "electro-chem"], 
+                          default=["stat.ML", "cs.LG", "physics.chem-ph"])
     
     search_triggered = st.button("🔍 Search EIS + AI", type="primary", use_container_width=True)
 
@@ -396,24 +345,9 @@ if st.session_state.papers_df is not None:
     df = st.session_state.papers_df
     st.subheader(f"📚 Top {len(df)} Identified Papers")
     
-    # Add filtering options
-    st.sidebar.subheader("Filter Results")
-    min_relevance = st.sidebar.slider("Minimum Relevance (%)", 0, 100, 15)
-    filtered_df = df[df['relevance_prob'] >= min_relevance]
-    
-    # Add search box for title/abstract
-    search_term = st.sidebar.text_input("Search in Title/Abstract")
-    if search_term:
-        mask = filtered_df['title'].str.contains(search_term, case=False) | filtered_df['abstract'].str.contains(search_term, case=False)
-        filtered_df = filtered_df[mask]
-    
-    st.write(f"Showing {len(filtered_df)} of {len(df)} papers")
-    
-    for idx, row in filtered_df.iterrows():
+    for idx, row in df.iterrows():
         with st.expander(f"[{row['relevance_prob']}%] {row['title']} ({row['year']})"):
             st.markdown(f"**Authors:** {row['authors']}")
-            if 'query_type' in row:
-                st.markdown(f"**Found via:** {row['query_type']}")
             st.markdown(f"**Matched AI/EIS Concepts:** `{row['matched_terms']}`")
             st.write(row['abstract'])
             
@@ -431,7 +365,7 @@ if st.session_state.papers_df is not None:
     ec1, ec2, ec3 = st.columns(3)
     
     with ec1:
-        csv_data = filtered_df.to_csv(index=False).encode('utf-8')
+        csv_data = df.to_csv(index=False).encode('utf-8')
         st.download_button("Export Metadata (CSV)", csv_data, "eis_ai_results.csv", "text/csv")
     
     with ec2:
